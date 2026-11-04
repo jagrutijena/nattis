@@ -1,0 +1,1321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+</head>
+<body>
+<title>Nattis — Encrypted Card Game</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one-screen card room — score rail on top, oval felt table with six seats, your fanned hand at the bottom. Single dark look by choice. */
+:root{
+  color-scheme:dark;
+  --ink:#0d1117; --ink-2:#141b24; --ink-3:#1c2531; --line:#2a3646;
+  --felt:#11574a; --felt-deep:#072b25; --rim:#5a4120;
+  --brass:#dcab4f; --brass-soft:#dcab4f33;
+  --fg:#e9edf2; --mute:#8d9aab;
+  --team-a:#4cc7b3; --team-b:#f0896a;
+  --card:#f8f4ea; --card-edge:#d9d2c2; --card-red:#c5303a; --card-black:#18202b;
+  --good:#6fd08c; --bad:#ef6a6a;
+  --f-display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --cw:clamp(46px, 11.2vw, 74px);
+  --tw:clamp(38px, 9.4vw, 62px);
+}
+html,body{height:100%}
+body{background:var(--ink);color:var(--fg);font-family:var(--f-body);overflow:hidden;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+#app{height:100%;position:relative;padding-left:max(0px, env(safe-area-inset-left, 0px));padding-right:max(0px, env(safe-area-inset-right, 0px))}
+.screen{height:100%;display:flex;flex-direction:column}
+
+/* ---------- Menu ---------- */
+#menu{align-items:center;justify-content:center;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:24px;background:radial-gradient(120% 70% at 50% 20%, #12332d 0%, var(--ink) 65%);overflow-y:auto}
+.menu-inner{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
+.mark{width:84px;height:84px;border-radius:22px;display:grid;place-items:center;background:linear-gradient(150deg,#1a6b5b,#0a3a32);border:2px solid var(--brass);box-shadow:0 10px 40px #0008, inset 0 0 0 4px #0a3a32;font-family:var(--f-display);font-weight:800;font-size:46px;color:var(--brass)}
+.menu-inner h1{font-family:var(--f-display);font-weight:800;font-size:52px;letter-spacing:-.02em;margin:0;line-height:1}
+.tag{margin:0;color:var(--mute);font-size:15px}
+.pill{display:inline-flex;gap:6px;align-items:center;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);border:1px solid var(--brass-soft);padding:5px 10px;border-radius:99px}
+.stack{display:flex;flex-direction:column;gap:10px;width:100%}
+.btn{border:1px solid var(--line);background:var(--ink-3);padding:14px 18px;border-radius:14px;font-weight:600;font-size:16px;transition:transform .12s, background .12s}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--brass);color:#1d1406;border-color:var(--brass);font-weight:700}
+.btn.ghost{background:transparent}
+.btn:disabled{opacity:.4;cursor:default}
+.menu-note{font-size:12.5px;color:var(--mute);line-height:1.5;max-width:32ch;margin:0}
+.stats{font-size:13px;color:var(--mute);font-variant-numeric:tabular-nums}
+
+/* ---------- Game header ---------- */
+#game{background:var(--ink)}
+.bar{display:flex;flex-direction:column;gap:6px;padding:8px max(12px, env(safe-area-inset-right, 0px)) 6px max(12px, env(safe-area-inset-left, 0px));background:var(--ink-2);border-bottom:1px solid var(--line)}
+.bar-row{display:flex;align-items:center;gap:8px}
+.team{flex:1;display:flex;align-items:center;gap:10px;min-width:0;padding:6px 10px;border-radius:12px;background:var(--ink-3)}
+.team.b{flex-direction:row-reverse;text-align:right}
+.team .sc{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
+.team.a .sc{color:var(--team-a)} .team.b .sc{color:var(--team-b)}
+.team .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team .tk{font-size:12.5px;font-variant-numeric:tabular-nums}
+.team .meta{min-width:0;display:flex;flex-direction:column;gap:2px}
+.target{font-size:10.5px;color:var(--mute);text-align:center;line-height:1.2;font-variant-numeric:tabular-nums;flex:0 0 auto}
+.target b{display:block;font-family:var(--f-display);font-size:15px;color:var(--fg)}
+.info{flex:1;display:flex;align-items:center;gap:8px;font-size:13px;min-width:0;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:99px;background:var(--ink-3);border:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+.chip .suit{font-size:15px;line-height:1}
+.chip.trump{border-color:var(--brass);color:var(--brass)}
+.icons{display:flex;gap:4px}
+.ib{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--ink-3);display:grid;place-items:center;padding:0}
+.ib svg{width:18px;height:18px;stroke:var(--fg);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- Table ---------- */
+.table-wrap{flex:1;position:relative;min-height:0;margin:8px 10px 0}
+.felt{position:absolute;inset:7% 13%;border-radius:46%/40%;background:radial-gradient(ellipse at 50% 42%, var(--felt) 0%, #0c4237 55%, var(--felt-deep) 100%);border:6px solid var(--rim);box-shadow:0 0 0 2px #00000060, inset 0 0 50px #0009, 0 20px 50px #0007}
+.felt::after{content:"NATTIS";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--f-display);font-weight:800;font-size:clamp(18px,5vw,34px);letter-spacing:.35em;color:#ffffff10;pointer-events:none}
+.seat{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:3px;z-index:3;width:84px}
+.av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:18px;background:var(--ink-3);border:2.5px solid var(--team-a);position:relative;transition:box-shadow .25s}
+.seat.tb .av{border-color:var(--team-b)}
+.seat.turn .av{box-shadow:0 0 0 4px var(--brass), 0 0 22px var(--brass)}
+.nm{font-size:12px;font-weight:600;max-width:84px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#0d1117cc;padding:1px 7px;border-radius:99px}
+.st{font-size:10.5px;color:var(--mute);min-height:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.badge{position:absolute;font-size:9.5px;font-weight:700;border-radius:99px;padding:1px 5px;line-height:1.3}
+.badge.d{top:-6px;left:-8px;background:var(--fg);color:var(--ink)}
+.badge.bd{bottom:-6px;right:-10px;background:var(--brass);color:#1d1406}
+.badge.n{top:-6px;right:-10px;background:var(--ink);border:1px solid var(--line);color:var(--fg)}
+.bubble{position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%) scale(.6);opacity:0;background:var(--fg);color:var(--ink);font-size:12px;font-weight:600;padding:5px 9px;border-radius:12px;white-space:nowrap;pointer-events:none;transition:opacity .2s, transform .2s;z-index:6;max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.bubble.show{opacity:1;transform:translateX(-50%) scale(1)}
+.seat.low .bubble{bottom:auto;top:-30px}
+
+#trick{position:absolute;inset:0;pointer-events:none;z-index:2}
+.tcard{position:absolute;transform:translate(-50%,-50%);transition:left .5s ease, top .5s ease, opacity .5s ease, transform .5s ease}
+.tcard.drop{animation:drop .32s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes drop{from{transform:translate(calc(-50% + var(--fx)),calc(-50% + var(--fy))) scale(.7);opacity:.3}}
+.tcard.win .card{box-shadow:0 0 0 3px var(--brass), 0 6px 18px #000a}
+.tcard.gone{opacity:0;transform:translate(-50%,-50%) scale(.5)}
+
+/* ---------- Cards ---------- */
+.card{width:var(--cw);height:calc(var(--cw) * 1.42);border-radius:calc(var(--cw) * .1);background:var(--card);border:1px solid var(--card-edge);color:var(--card-black);position:relative;box-shadow:0 3px 10px #0007;font-family:var(--f-display);flex:0 0 auto}
+.card.red{color:var(--card-red)}
+.card .ix{position:absolute;left:8%;top:5%;display:flex;flex-direction:column;align-items:center;font-weight:800;line-height:.95;font-size:calc(var(--cw) * .3)}
+.card .ix i{font-style:normal;font-size:calc(var(--cw) * .26)}
+.card .pip{position:absolute;right:9%;bottom:6%;font-size:calc(var(--cw) * .52);line-height:1}
+.card.jk{background:linear-gradient(160deg,#fff7e2,#f2e2b6)}
+.card.jk .jt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.card.jk .star{font-size:calc(var(--cw) * .5);line-height:1}
+.card.jk .jw{font-size:calc(var(--cw) * .16);font-weight:800;letter-spacing:.08em}
+.card.jk.big{color:var(--card-red)} .card.jk.small{color:var(--card-black);background:linear-gradient(160deg,#f3f1ec,#d9d6cf)}
+.tcard .card{--cw:var(--tw)}
+
+#hand-wrap{padding:4px max(12px, env(safe-area-inset-right, 0px)) 10px max(12px, env(safe-area-inset-left, 0px));}
+#hand{display:flex;justify-content:center;align-items:flex-end;min-height:calc(var(--cw) * 1.42 + 14px);padding-top:14px}
+#hand .card{margin-left:calc(var(--cw) * -0.24);transition:transform .15s, filter .15s}
+#hand .card:first-child{margin-left:0}
+#hand.mine .card.ok{transform:translateY(-10px);cursor:pointer}
+#hand.mine .card.ok:hover{transform:translateY(-16px)}
+#hand.mine .card.no{filter:brightness(.55)}
+.card.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+/* ---------- Action strip ---------- */
+#action{min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding:6px max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));text-align:center;font-size:14px}
+#action .hint{color:var(--mute)}
+#action .hint b{color:var(--fg)}
+.bidbtn{min-width:44px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--ink-3);font-family:var(--f-display);font-weight:800;font-size:18px;padding:0 10px}
+.bidbtn.pass{font-family:var(--f-body);font-size:14px;font-weight:600;padding:0 16px}
+.bidbtn:not(:disabled):not(.pass){border-color:var(--brass);color:var(--brass)}
+.bidbtn:disabled{opacity:.3}
+.suitbtn{width:58px;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:28px;color:var(--card-black)}
+.suitbtn.red{color:var(--card-red)}
+
+/* ---------- Modal ---------- */
+.modal{position:fixed;inset:0;z-index:50;background:#05080ccc;display:flex;align-items:flex-end;justify-content:center;padding-left:max(10px, env(safe-area-inset-left, 0px));padding-right:max(10px, env(safe-area-inset-right, 0px));padding-bottom:env(safe-area-inset-bottom, 0px);padding-top:max(20px, env(safe-area-inset-top, 0px))}
+@media (min-width:640px){.modal{align-items:center}}
+.sheet{width:100%;max-width:440px;max-height:100%;overflow-y:auto;background:var(--ink-2);border:1px solid var(--line);border-radius:20px 20px 0 0;padding:20px 18px 22px;box-shadow:0 -10px 40px #0009}
+@media (min-width:640px){.sheet{border-radius:20px}}
+.sheet h2{font-family:var(--f-display);font-weight:800;font-size:24px;margin:0 0 4px;text-wrap:balance}
+.sheet h3{font-family:var(--f-display);font-size:15px;margin:18px 0 6px;color:var(--brass);letter-spacing:.02em}
+.sheet p,.sheet li{font-size:14px;line-height:1.55;color:#c9d2dc}
+.sheet ul{padding-left:18px;margin:4px 0}
+.sheet .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.sheet .row .btn{flex:1}
+.x{float:right;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--ink-3);font-size:18px;line-height:1}
+.field{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.field label{font-size:12px;color:var(--mute)}
+.field input{background:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--fg);font:inherit;font-size:15px;user-select:text}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;padding:10px 6px;font-size:14px}
+.seg button.on{background:var(--brass);color:#1d1406;font-weight:700}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}
+.tog small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.sw{width:46px;height:28px;border-radius:99px;border:1px solid var(--line);background:var(--ink);position:relative;flex:0 0 auto;padding:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--mute);transition:left .15s, background .15s}
+.sw.on{background:#3b2d12;border-color:var(--brass)}
+.sw.on::after{left:21px;background:var(--brass)}
+.botnames{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.botnames .field{margin-top:0}
+.result{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 4px}
+.result div{background:var(--ink-3);border-radius:14px;padding:12px;text-align:center}
+.result .big{font-family:var(--f-display);font-weight:800;font-size:30px;font-variant-numeric:tabular-nums}
+.result .a .big{color:var(--team-a)} .result .b .big{color:var(--team-b)}
+.result small{color:var(--mute);font-size:12px}
+.verdict{font-family:var(--f-display);font-weight:700;font-size:18px;margin:8px 0 0}
+.verdict.good{color:var(--good)} .verdict.bad{color:var(--bad)}
+.past{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.past .pt{background:var(--ink-3);border-radius:12px;padding:8px 10px}
+.past .ph{font-size:12px;color:var(--mute);margin-bottom:6px;display:flex;justify-content:space-between}
+.past .pc{display:flex;gap:4px;--cw:38px;flex-wrap:wrap}
+.past .pc .card.w{box-shadow:0 0 0 2px var(--brass)}
+.timer{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:10px}
+.timer i{display:block;height:100%;background:var(--brass);transition:width 1s linear}
+.partner{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.numrow{display:flex;gap:6px;margin-top:10px}
+.numrow .bidbtn{flex:1}
+
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top, 0px) + 118px);transform:translate(-50%,-10px);background:var(--fg);color:var(--ink);font-weight:600;font-size:14px;padding:9px 16px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:60;max-width:calc(100% - 32px);text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#shuffle{position:absolute;inset:0;display:grid;place-items:center;z-index:5;pointer-events:none}
+#shuffle span{font-family:var(--f-display);font-weight:700;font-size:16px;letter-spacing:.2em;text-transform:uppercase;color:var(--brass);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-height:620px){:root{--cw:clamp(40px,9vw,56px);--tw:clamp(34px,8vw,48px)}.av{width:34px;height:34px;font-size:15px}}
+
+/* ---------- Lobby ---------- */
+#lobby{align-items:center;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:24px;overflow-y:auto;background:radial-gradient(120% 70% at 50% 0%, #12332d 0%, var(--ink) 60%)}
+.lobby-inner{width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px}
+.lobby-inner h2{font-family:var(--f-display);font-weight:800;font-size:28px;margin:0}
+.conn{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--mute)}
+.conn::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--mute)}
+.conn.ok::before{background:var(--good)} .conn.bad::before{background:var(--bad)}
+.codebox{background:var(--ink-2);border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.codebox small{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.code{font-family:var(--f-display);font-weight:800;font-size:34px;letter-spacing:.18em;color:var(--brass);user-select:text;-webkit-user-select:text}
+.seatlist{display:flex;flex-direction:column;gap:6px}
+.srow{display:flex;align-items:center;gap:10px;background:var(--ink-2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-height:48px}
+.srow .dot{width:10px;height:10px;border-radius:50%;background:var(--team-a);flex:0 0 auto}
+.srow.tb .dot{background:var(--team-b)}
+.srow .who{flex:1;min-width:0}
+.srow .who b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .who span{font-size:12px;color:var(--mute)}
+.srow.bot .who b{color:var(--mute);font-weight:500}
+.srow .mv{border:1px solid var(--line);background:var(--ink-3);border-radius:9px;padding:6px 10px;font-size:12.5px}
+.lobby-note{font-size:12.5px;color:var(--mute);line-height:1.5;margin:0}
+.lock{font-size:11px;color:var(--brass);letter-spacing:.06em}
+.phrases{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.phrases .btn{padding:11px 10px;font-size:14px}
+</style>
+
+<div id="app">
+  <section id="menu" class="screen">
+    <div class="menu-inner">
+      <div class="mark" aria-hidden="true">N</div>
+      <h1>Nattis</h1>
+      <p class="tag">6-player encrypted card game</p>
+      <span class="pill">AES-256-GCM encrypted hands</span>
+      <div class="stack">
+        <button class="btn primary" id="b-play">Play vs Computer</button>
+        <button class="btn" id="b-continue" hidden>Continue game</button>
+      </div>
+      <p class="tag" style="font-size:13px">or play online</p>
+      <div class="stack">
+        <button class="btn" id="b-host">Host a Game</button>
+        <button class="btn" id="b-join">Join a Game</button>
+        <button class="btn ghost" id="b-rejoin" hidden>Rejoin game</button>
+        <button class="btn ghost" id="b-rules">View Rules</button>
+        <button class="btn ghost" id="b-settings">Table, Speed &amp; Bots</button>
+      </div>
+      <p class="stats" id="stats"></p>
+    </div>
+  </section>
+
+  <section id="lobby" class="screen" hidden>
+    <div class="lobby-inner">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>Game Lobby</h2><span class="conn" id="conn">Connecting…</span></div>
+      <div class="codebox"><div><small>Room code</small><div class="code" id="lcode">-----</div></div><button class="btn" id="l-copy" style="padding:10px 14px;font-size:14px">Copy invite</button></div>
+      <p class="lobby-note" id="lnote"></p>
+      <div class="seatlist" id="seatlist"></div>
+      <div class="stack">
+        <button class="btn primary" id="l-start" hidden>Start Game</button>
+        <button class="btn ghost" id="l-leave">Leave room</button>
+      </div>
+      <p class="lobby-note">Empty seats are filled by bots when the game starts. Teams sit alternately: Team A in seats 1, 3, 5 and Team B in seats 2, 4, 6. Each player's cards are sent encrypted with a key only that player and the host share.</p>
+    </div>
+  </section>
+
+  <section id="game" class="screen" hidden>
+    <header class="bar">
+      <div class="bar-row">
+        <div class="team a"><div class="sc" id="sa">0</div><div class="meta"><span class="lbl" id="la">Team A</span><span class="tk" id="ta">Tricks 0</span></div></div>
+        <div class="target"><b>62</b>to win</div>
+        <div class="team b"><div class="sc" id="sb">0</div><div class="meta"><span class="lbl" id="lb">Team B</span><span class="tk" id="tb">Tricks 0</span></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="info" id="info"></div>
+        <div class="icons">
+          <button class="ib" id="i-chat" aria-label="Say something"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></button>
+          <button class="ib" id="i-past" aria-label="Past tricks"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
+          <button class="ib" id="i-rules" aria-label="Rules"><svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/><path d="M9 7h6M9 11h6"/></svg></button>
+          <button class="ib" id="i-set" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+          <button class="ib" id="i-home" aria-label="Back to menu"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg></button>
+        </div>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <div class="felt"></div>
+      <div id="seats"></div>
+      <div id="trick"></div>
+      <div id="shuffle" hidden><span>Shuffling…</span></div>
+    </div>
+    <div id="action"></div>
+    <div id="hand-wrap"><div id="hand"></div></div>
+  </section>
+
+  <div id="modal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
+  <div id="toast" role="status"></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ===== Paste your Firebase web app config here (see setup steps) ===== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCxYDNKoLlKOULnHEtRk2kJo_eKOKPwhFU",
+  authDomain: "nattis-df9e9.firebaseapp.com",
+  databaseURL: "https://nattis-df9e9-default-rtdb.firebaseio.com",
+  projectId: "nattis-df9e9",
+  storageBucket: "nattis-df9e9.firebasestorage.app",
+  messagingSenderId: "481326486582",
+  appId: "1:481326486582:web:bdfebbb219f100f4ec7497"
+};
+</script>
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const SUITS = ['S','H','C','D'];
+const SYM = {S:'♠',H:'♥',D:'♦',C:'♣'};
+const SNAME = {S:'Spades',H:'Hearts',D:'Diamonds',C:'Clubs'};
+const RED = s => s==='H' || s==='D';
+const RL = {11:'J',12:'Q',13:'K',14:'A'};
+const rl = r => RL[r] || String(r);
+const card = id => ({s:id[0], r:+id.slice(1), id});
+const isJ = c => c.s === 'X';
+const isBig = c => isJ(c) && c.r === 16;
+const team = p => p % 2;               // 0 = Team A (seats 0,2,4), 1 = Team B
+const TARGET = 62;
+const SEAT_POS = [[50,90],[11,68],[11,24],[50,7],[89,24],[89,68]];
+const TRICK_POS = [[50,66],[32,57],[32,37],[50,28],[68,37],[68,57]];
+const FROM = [[0,70],[-70,30],[-70,-30],[0,-70],[70,-30],[70,30]];
+const PHRASES = ['Nice one!','Well played','Oops','Hurry up!','ଜୋକର!','Trust me','Raise it!','Good game'];
+const esc = t => String(t).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const cleanName = n => typeof n === 'string' ? n.replace(/[\u0000-\u001f​-‏‪-‮]/g,'').trim().slice(0,14) : '';
+const rid = (n, abc) => { abc = abc || 'abcdefghjkmnpqrstuvwxyz23456789'; let s=''; const a = crypto.getRandomValues(new Uint8Array(n)); for(const x of a) s += abc[x % abc.length]; return s; };
+
+/* ---------- storage ---------- */
+const store = {
+  get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+const DEF = {name:'', sound:true, voice:true, talk:true, speed:'normal', raise:20, bots:['Golu','Chintu','Bablu','Tuku','Pintu']};
+let SET = Object.assign({}, DEF, store.get('nattis-settings') || {});
+if(!Array.isArray(SET.bots) || SET.bots.length !== 5) SET.bots = DEF.bots.slice();
+let STATS = store.get('nattis-stats') || {played:0, won:0, last:''};
+let JOIN = store.get('nattis-join');        // {code, tok, name} for rejoining as a guest
+const myName = () => cleanName(SET.name) || 'You';
+const delay = () => ({slow:1150, normal:700, fast:340})[SET.speed] || 700;
+
+/* ---------- session state ---------- */
+let MODE = 'menu';   // 'solo' | 'host' | 'client'
+let S = store.get('nattis-game');   // engine state (solo or host only)
+let ME = 0;          // my seat
+let V = null;        // public view of the table
+let HAND = [];       // my cards
+let NR = null;       // named room for online games
+let waitingAct = false;
+let GEN = 0;
+function later(fn, ms){ const g = GEN; setTimeout(() => { if(g === GEN) fn(); }, ms); }
+function firebaseRoom(){
+  if(!window.firebase || !FIREBASE_CONFIG.databaseURL) return null;
+  try{ if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG); }catch(e){ return null; }
+  const db = firebase.database();
+  const myPeer = rid(16);
+  return { join: async (name) => {
+    const base = db.ref('rooms/' + name + '/peers'), me = base.child(myPeer), cref = db.ref('.info/connected');
+    let mine = {}, snap = [], peerFns = [], connFns = [], connected = false;
+    const write = () => me.set({j: JSON.stringify(mine), t: firebase.database.ServerValue.TIMESTAMP});
+    const self = () => Object.freeze({peer:myPeer, isMe:true, sameTab:true, by:null, kind:'viewer', guest:false, presence:Object.freeze(Object.assign({}, mine)), updatedAt:Date.now()});
+    const onVal = s => {
+      const v = s.val() || {};
+      snap = Object.keys(v).filter(k => k !== myPeer).map(k => {
+        let pz = {}; try{ pz = JSON.parse(v[k].j) || {}; }catch(e){}
+        return Object.freeze({peer:k, isMe:false, sameTab:false, by:null, kind:'viewer', guest:false, presence:pz, updatedAt:Date.now()});
+      });
+      snap.push(self());
+      peerFns.forEach(f => { try{ f({peers:snap}); }catch(e){ console.error(e); } });
+    };
+    const onConn = s => {
+      connected = !!s.val();
+      if(connected){ me.onDisconnect().remove(); write(); }
+      connFns.forEach(f => f(connected));
+    };
+    base.on('value', onVal);
+    cref.on('value', onConn);
+    await me.onDisconnect().remove();
+    await write();
+    return {
+      name,
+      presence: async patch => { for(const k in patch){ if(patch[k] === null) delete mine[k]; else mine[k] = patch[k]; } await write(); },
+      peers: () => snap,
+      onPeers: (fn, onErr) => { peerFns.push(fn); setTimeout(() => fn({peers:snap}), 0); return () => { peerFns = peerFns.filter(x => x !== fn); }; },
+      onConnection: fn => { connFns.push(fn); setTimeout(() => fn(connected), 0); return () => { connFns = connFns.filter(x => x !== fn); }; },
+      connected: () => connected,
+      leave: async () => { base.off('value', onVal); cref.off('value', onConn); peerFns = []; connFns = []; try{ await me.onDisconnect().cancel(); await me.remove(); }catch(e){} }
+    };
+  }};
+}
+const roomP = Promise.resolve(firebaseRoom());
+
+/* ---------- crypto: ECDH P-256 key agreement → AES-256-GCM ---------- */
+const subtle = window.crypto && crypto.subtle;
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+let KP = null, MYPUB = '';
+async function ensureKeys(){
+  if(KP) return;
+  KP = await subtle.generateKey({name:'ECDH', namedCurve:'P-256'}, false, ['deriveKey']);
+  MYPUB = b64(await subtle.exportKey('raw', KP.publicKey));
+}
+async function deriveKey(pub){
+  const k = await subtle.importKey('raw', unb64(pub), {name:'ECDH', namedCurve:'P-256'}, false, []);
+  return subtle.deriveKey({name:'ECDH', public:k}, KP.privateKey, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function encrypt(key, text){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(text));
+  return b64(iv) + '.' + b64(ct);
+}
+async function decrypt(key, s){
+  const [a,b] = s.split('.');
+  return new TextDecoder().decode(await subtle.decrypt({name:'AES-GCM', iv:unb64(a)}, key, unb64(b)));
+}
+
+/* ---------- sound & voice ---------- */
+let AC = null;
+function beep(f, d, type, vol){
+  if(!SET.sound) return;
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'triangle'; o.frequency.value = f;
+    g.gain.setValueAtTime(vol || .06, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, AC.currentTime + d);
+    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + d);
+  }catch(e){}
+}
+const SND = {
+  card(){ beep(220,.07,'square',.025); },
+  bid(){ beep(440,.08); },
+  win(){ beep(523,.12); setTimeout(()=>beep(784,.18),110); },
+  joker(){ beep(160,.25,'sawtooth',.05); setTimeout(()=>beep(320,.2,'square',.04),90); },
+  deal(){ beep(300,.05,'square',.02); setTimeout(()=>beep(340,.05,'square',.02),80); }
+};
+function say(t){
+  if(!SET.voice) return;
+  try{ const u = new SpeechSynthesisUtterance(t); u.rate = 1.05; speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){}
+}
+
+/* ---------- rules ---------- */
+function deck(){
+  const d = [];
+  for(const s of SUITS) for(let r=2;r<=14;r++) d.push(card(s+r));
+  d.push(card('X16'), card('X15'));
+  for(let i=d.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [d[i],d[j]] = [d[j],d[i]]; }
+  return d;
+}
+function sortHand(h, trump){
+  const order = trump ? [trump].concat(SUITS.filter(s=>s!==trump)) : SUITS;
+  return h.slice().sort((a,b) => {
+    const ka = isJ(a) ? -1 : order.indexOf(a.s), kb = isJ(b) ? -1 : order.indexOf(b.s);
+    return ka !== kb ? ka - kb : b.r - a.r;
+  });
+}
+function leadSuit(trick){ const f = trick.find(t => !isJ(t.c)); return f ? f.c.s : null; }
+function power(c, lead, trump){
+  if(isBig(c)) return 1000;
+  if(c.s === trump) return 500 + c.r;
+  if(isJ(c)) return 400;
+  if(c.s === lead) return 100 + c.r;
+  return 0;
+}
+function winnerOf(trick, trump){
+  const lead = leadSuit(trick);
+  let best = null, bp = -1;
+  for(const t of trick){ const p = power(t.c, lead, trump); if(p > bp){ bp = p; best = t; } }
+  return {p: best.p, c: best.c, pow: bp};
+}
+function legal(hand, trick){
+  if(trick.length === 0){ const nj = hand.filter(c => !isJ(c)); return nj.length ? nj : hand.slice(); }
+  const lead = leadSuit(trick);
+  if(!lead) return hand.slice();
+  return hand.some(c => c.s === lead) ? hand.filter(c => c.s === lead || isJ(c)) : hand.slice();
+}
+
+/* ---------- bot brains ---------- */
+function handStrength(h){
+  let e = 0, longest = 0;
+  if(h.some(isBig)) e += 1;
+  if(h.some(c => isJ(c) && c.r === 15)) e += .7;
+  for(const s of SUITS){
+    const cs = h.filter(c => c.s === s), n = cs.length;
+    longest = Math.max(longest, n);
+    if(cs.some(c=>c.r===14)) e += .9;
+    if(cs.some(c=>c.r===13)) e += n>=2 ? .6 : .2;
+    if(cs.some(c=>c.r===12)) e += n>=3 ? .3 : 0;
+  }
+  if(longest >= 4) e += (longest - 3) * .65;
+  return e;
+}
+function bestSuit(h){
+  let bs = 'S', bv = -1;
+  for(const s of SUITS){
+    const cs = h.filter(c => c.s === s);
+    const v = cs.length + cs.reduce((a,c)=> a + (c.r===14?1:c.r===13?.6:c.r===12?.3:0), 0);
+    if(v > bv){ bv = v; bs = s; }
+  }
+  return bs;
+}
+function moreWins(p){
+  let e = 0;
+  for(const c of S.hands[p]){
+    if(isBig(c)) e += 1;
+    else if(isJ(c)) e += .55;
+    else if(c.s === S.trump) e += c.r>=13 ? .9 : c.r>=11 ? .5 : .3;
+    else if(c.r === 14) e += .6;
+    else if(c.r === 13) e += .25;
+  }
+  return Math.min(Math.round(e), 4);
+}
+const cost = c => isBig(c) ? 60 : isJ(c) ? 45 : c.s === S.trump ? 30 + c.r : c.r;
+function lowest(cards){
+  const plain = cards.filter(c => !isJ(c) && c.s !== S.trump);
+  const pool = plain.length ? plain : cards;
+  return pool.reduce((a,b) => cost(b) < cost(a) ? b : a);
+}
+function botChoose(p){
+  const hand = S.hands[p], L = legal(hand, S.trick), tr = S.trump;
+  if(S.trick.length === 0){
+    const aces = L.filter(c => c.r === 14 && c.s !== tr);
+    if(aces.length) return aces[0];
+    const trumps = L.filter(c => c.s === tr);
+    if(trumps.length >= 4 && team(p) === team(S.bidder)) return trumps.reduce((a,b)=> b.r>a.r?b:a);
+    const bySuit = {};
+    L.forEach(c => { if(c.s !== tr && !isJ(c)) (bySuit[c.s] = bySuit[c.s] || []).push(c); });
+    const suits = Object.keys(bySuit).sort((a,b)=> bySuit[b].length - bySuit[a].length);
+    if(suits.length) return bySuit[suits[0]].reduce((a,b)=> b.r<a.r?b:a);
+    return lowest(L);
+  }
+  const w = winnerOf(S.trick, tr), lead = leadSuit(S.trick);
+  const left = 6 - S.trick.length - 1;
+  const partnerWins = team(w.p) === team(p);
+  if(partnerWins && (left === 0 || w.pow >= 512 || (w.pow >= 113 && left <= 2))) return lowest(L);
+  const winners = L.filter(c => power(c, lead || (isJ(c) ? null : c.s), tr) > w.pow);
+  if(!winners.length) return lowest(L);
+  const pick = winners.reduce((a,b)=> cost(b) < cost(a) ? b : a);
+  if(isBig(pick) && S.trickNo < 4 && left > 2 && Math.random() < .5) return lowest(L);
+  return pick;
+}
+
+/* ---------- engine (runs on the host, or locally in solo games) ---------- */
+const TALK = {
+  joker:['ଜୋକର!','Joker slam!','Take that!','Boom. Joker.'],
+  trumped:['Arre, trumped!','Who saw that coming?','Oof, my card…','Not fair!'],
+  made:['Bid in the bag.','Easy money.','Told you so.'],
+  broke:['Bid broken!','Better luck next time.','Ha! Double points.'],
+  pass:['Pass.','Not this time.','Pass, pass.'],
+  raise:['Going for the slam!','All in.','Let’s get greedy.']
+};
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const isBot = p => !S.human[p] || S.away[p];
+function fx(k, p, t){ S.fxN = (S.fxN||0) + 1; S.fx.push({i:S.fxN, k, p, t}); if(S.fx.length > 8) S.fx.shift(); }
+function talk(p, kind){ if(isBot(p)) fx('t', p, pick(TALK[kind])); }
+const save = () => { if(S) store.set('nattis-game', S); };
+
+function freshSeats(mode){
+  return {mode, names:[myName()].concat(SET.bots), human:[true,false,false,false,false,false], tokens:[null,null,null,null,null,null], away:[false,false,false,false,false,false], peers:[], fx:[], fxN:0};
+}
+function soloGame(){
+  bumpGen(); MODE = 'solo'; ME = 0; leaveRoom();
+  S = freshSeats('solo');
+  startGame();
+}
+function startGame(){
+  S.scores = [0,0]; S.dealer = Math.floor(Math.random()*6); S.round = 1; S.gid = rid(8);
+  for(let p=1;p<6;p++) if(!S.human[p]) S.names[p] = SET.bots[p-1];
+  showScreen('game');
+  startRound();
+}
+function startRound(){
+  const d = deck();
+  S.hands = [[],[],[],[],[],[]];
+  for(let i=0;i<54;i++) S.hands[(S.dealer + 1 + i) % 6].push(d[i]);
+  Object.assign(S, {phase:'deal', bids:Array(6).fill(null), bidTurn:(S.dealer+1)%6, bidCount:0, bid:0, bidder:-1,
+    trump:null, trick:[], tricks:[0,0], trickNo:1, past:[], raiseDone:false, raiseOpts:null, raise:null, turn:-1, result:null, lastW:-1});
+  S.dealN = (S.dealN || 0) + 1;
+  fx('s', -1, 'deal');
+  advance();
+}
+let pendingKey = null;
+function botStep(key, fn, ms){
+  if(pendingKey === key) return;
+  pendingKey = key;
+  later(() => { if(pendingKey === key) pendingKey = null; fn(); }, ms || delay());
+}
+function bumpGen(){ GEN++; pendingKey = null; }
+function advance(){
+  publish();
+  if(S.phase === 'bid'){
+    if(S.bidCount >= 6) return resolveBids();
+    const p = S.bidTurn;
+    if(isBot(p)) botStep('bid'+S.dealN+'-'+S.bidCount, () => { if(S.phase==='bid' && S.bidTurn===p && isBot(p)) botBid(p); });
+  } else if(S.phase === 'trump'){
+    const p = S.bidder;
+    if(isBot(p)) botStep('trump'+S.dealN, () => { if(S.phase==='trump' && isBot(p)) chooseTrump(bestSuit(S.hands[p])); });
+  } else if(S.phase === 'play'){
+    if(S.trick.length >= 6) return finishTrick();
+    const p = S.turn, key = 'play'+S.dealN+'-'+S.trickNo+'-'+S.trick.length;
+    if(isBot(p)) botStep(key, () => { if(S.phase==='play' && S.turn===p && isBot(p) && S.trick.length<6) playCard(p, botChoose(p)); });
+  } else if(S.phase === 'collect'){
+    botStep('collect'+S.dealN+'-'+S.trickNo, afterTrick, 1400);
+  } else if(S.phase === 'raise'){
+    maybeBotDecide();
+  } else if(S.phase === 'deal'){
+    botStep('deal'+S.dealN, () => { if(S.phase === 'deal'){ S.phase = 'bid'; advance(); } }, 800);
+  } else if(S.phase === 'redeal'){
+    botStep('redeal'+S.dealN, () => { if(S.phase === 'redeal') startRound(); }, 1400);
+  }
+}
+function botBid(p){
+  const next = S.bid ? S.bid + 1 : 5;
+  const est = handStrength(S.hands[p]) + 2.1;
+  placeBid(p, next <= 9 && Math.floor(est) >= next ? next : 'pass');
+}
+function placeBid(p, v){
+  S.bids[p] = v;
+  if(v !== 'pass'){ S.bid = v; S.bidder = p; fx('s',-1,'bid'); fx('b', p, 'Bid '+v); }
+  else fx('b', p, isBot(p) ? pick(TALK.pass) : 'Pass');
+  S.bidCount++; S.bidTurn = (p+1) % 6;
+  advance();
+}
+function resolveBids(){
+  if(S.bidder < 0){ fx('o',-1,'Everyone passed. Re-dealing.'); S.phase = 'redeal'; return advance(); }
+  S.phase = 'trump';
+  fx('o', -1, S.names[S.bidder] + ' wins the bid at ' + S.bid);
+  advance();
+}
+function chooseTrump(s){
+  S.trump = s; S.phase = 'play'; S.leader = S.turn = S.dealer;
+  fx('v', -1, 'Trump is ' + SNAME[s]);
+  fx('o', -1, 'Trump: ' + SNAME[s] + ' ' + SYM[s] + ' · ' + S.names[S.dealer] + ' leads');
+  advance();
+}
+function playCard(p, c){
+  const before = S.trick.length ? winnerOf(S.trick, S.trump) : null;
+  S.hands[p] = S.hands[p].filter(x => x.id !== c.id);
+  S.trick.push({p, c});
+  fx('s', -1, 'card');
+  if(isJ(c)){ fx('s',-1,'joker'); fx('v',-1, isBig(c) ? 'Big Joker!' : 'Joker!'); talk(p, 'joker'); }
+  if(before && c.s === S.trump && leadSuit(S.trick) !== S.trump && team(before.p) !== team(p) && before.c.s !== S.trump && !isJ(before.c)) talk(before.p, 'trumped');
+  S.turn = (p+1) % 6;
+  advance();
+}
+function finishTrick(){
+  const w = winnerOf(S.trick, S.trump);
+  S.tricks[team(w.p)]++;
+  S.past.push({cards:S.trick.slice(), w:w.p});
+  S.lastW = w.p; S.phase = 'collect';
+  fx('s', -1, 'win');
+  advance();
+}
+function afterTrick(){
+  if(S.phase !== 'collect') return;
+  S.trick = []; S.leader = S.turn = S.lastW; S.trickNo++;
+  if(S.trickNo > 9) return endRound();
+  if(S.trickNo === 9) fx('v', -1, 'Last trick');
+  if(S.trickNo === 6 && !S.raiseDone){
+    const bt = team(S.bidder), taken = S.tricks[bt], opts = [];
+    if(S.bid < 8 && taken >= 4) opts.push(8);
+    if(S.bid < 9 && taken === 5) opts.push(9);
+    S.raiseDone = true;
+    if(opts.length){
+      S.raiseOpts = opts; S.phase = 'raise';
+      S.raise = {left:SET.raise, total:SET.raise, answers:{}};
+      partnersOf(S.bidder).forEach(p => { if(isBot(p)){ const n = moreWins(p); S.raise.answers[p] = n; fx('b', p, 'I can win '+n+' more'); } });
+      return advance();
+    }
+  }
+  S.phase = 'play'; advance();
+}
+const partnersOf = b => [0,1,2,3,4,5].filter(p => p !== b && team(p) === team(b));
+const raiseName = v => v === 9 ? 'Grand Slam (9)' : 'Little Slam (8)';
+function maybeBotDecide(){
+  if(S.phase !== 'raise' || !isBot(S.bidder)) return;
+  if(partnersOf(S.bidder).every(p => isBot(p) || S.raise.answers[p] != null)) botStep('raise'+S.dealN, botDecide);
+}
+function botDecide(){
+  if(S.phase !== 'raise') return;
+  const b = S.bidder, taken = S.tricks[team(b)];
+  let sum = moreWins(b);
+  partnersOf(b).forEach(p => { sum += +S.raise.answers[p] || 0; });
+  let choice = 0;
+  for(const v of S.raiseOpts) if(sum >= v - taken) choice = v;
+  applyRaise(choice);
+}
+function applyRaise(v){
+  if(S.phase !== 'raise') return;
+  const n = S.names[S.bidder];
+  if(v){ S.bid = v; fx('v',-1, n + ' raises to ' + (v===9?'Grand Slam':'Little Slam')); fx('o',-1, n + ' raises to ' + raiseName(v)); talk(S.bidder,'raise'); }
+  else fx('o', -1, n + ' keeps the bid at ' + S.bid);
+  S.phase = 'play'; S.raise = null;
+  advance();
+}
+function endRound(){
+  const bt = team(S.bidder), taken = S.tricks[bt], bid = S.bid, made = taken >= bid;
+  let pts;
+  if(made){ pts = bid === 9 ? 20 : bid === 8 ? 15 : bid; S.scores[bt] += pts; }
+  else { pts = bid * 2; S.scores[1-bt] += pts; }
+  S.result = {bt, taken, bid, made, pts, bidder:S.bidder, trump:S.trump};
+  fx('v', -1, made ? 'Bid made' : 'Bid broken');
+  for(let p=0;p<6;p++) if(isBot(p) && Math.random() < .35) talk(p, (team(p) === bt) === made ? 'made' : 'broke');
+  S.phase = (S.scores[0] >= TARGET || S.scores[1] >= TARGET) ? 'over' : 'roundEnd';
+  advance();
+}
+function nextRound(){ S.dealer = (S.dealer+1)%6; S.round++; startRound(); }
+
+/* host clock: raise countdown and seat presence */
+setInterval(() => {
+  if(!S || (MODE !== 'solo' && MODE !== 'host')) return;
+  if(MODE === 'host' && NR) hostPresenceTick();
+  if(S.phase === 'raise' && S.raise){
+    S.raise.left--;
+    if(S.raise.left <= 0){ if(isBot(S.bidder)) botDecide(); else applyRaise(0); }
+    else publish();
+  }
+}, 1000);
+
+/* every action a seat can take, validated here */
+function handleAct(p, a){
+  if(!S || !a || typeof a.t !== 'string') return;
+  let v = a.v;
+  const t = a.t;
+  if(t === 'say'){ if(PHRASES[v]){ fx('b', p, PHRASES[v]); publish(); } return; }
+  if(p === 0 && t === 'next' && S.phase === 'roundEnd') return nextRound();
+  if(p === 0 && t === 'again' && S.phase === 'over') return startGame();
+  if(isBot(p)) return;
+  if(t === 'bid' && S.phase === 'bid' && S.bidTurn === p && S.bidCount < 6){
+    if(v === 'pass') return placeBid(p, 'pass');
+    v = +v; if(Number.isInteger(v) && v >= 5 && v <= 9 && v > S.bid) placeBid(p, v);
+  } else if(t === 'trump' && S.phase === 'trump' && S.bidder === p && SUITS.includes(v)) chooseTrump(v);
+  else if(t === 'play' && S.phase === 'play' && S.turn === p && S.trick.length < 6){
+    const c = S.hands[p].find(x => x.id === v);
+    if(c && legal(S.hands[p], S.trick).some(x => x.id === v)) playCard(p, c);
+    else publish();
+  } else if(t === 'raise' && S.phase === 'raise' && S.bidder === p && (v === 0 || S.raiseOpts.includes(v))) applyRaise(v);
+  else if(t === 'more' && S.phase === 'raise' && S.bidder === p){ S.raise.left += 10; S.raise.total += 10; publish(); }
+  else if(t === 'answer' && S.phase === 'raise' && p !== S.bidder && team(p) === team(S.bidder) && S.raise.answers[p] == null){
+    v = +v; if(Number.isInteger(v) && v >= 0 && v <= 4){ S.raise.answers[p] = v; fx('b', p, 'I can win '+v+' more'); maybeBotDecide(); publish(); }
+  }
+}
+
+/* ---------- public view ---------- */
+function viewFor(){
+  const sp = S.peers || [];
+  return {
+    ph:S.phase, code:S.code || '', gid:S.gid || '', sc:S.scores || [0,0], dl:S.dealer, rd:S.round,
+    nm:S.names, bo:S.names.map((_,p) => isBot(p) ? 1 : 0), aw:S.away.map(x => x?1:0),
+    sp:[0,1,2,3,4,5].map(p => S.tokens[p] ? (sp[p] || '') : ''),
+    bids:S.bids || [], bt:S.bidTurn, bc:S.bidCount, bid:S.bid || 0, bd:S.bidder == null ? -1 : S.bidder, tr:S.trump || null,
+    tk:(S.trick || []).map(t => [t.p, t.c.id]), tw:S.tricks || [0,0], tn:S.trickNo || 1, turn:S.turn, lw:S.lastW,
+    pa:(S.past || []).map(t => t.w + ':' + t.cards.map(x => x.p + x.c.id).join('.')),
+    cn:S.hands ? S.hands.map(h => h.length) : [0,0,0,0,0,0],
+    res:S.result || null, ro:S.raiseOpts || null, ra:S.raise || null, fx:S.fx
+  };
+}
+function publish(){
+  save();
+  if(MODE !== 'solo' && MODE !== 'host') return;
+  V = viewFor();
+  HAND = S.hands ? S.hands[0] : [];
+  if(MODE === 'host') pushPresence();
+  renderAll();
+}
+
+/* ---------- online: host ---------- */
+const KEYS = {};       // token -> {pub, key}
+const ENC = {};        // seat -> {plain, ct}
+const LASTN = {};      // token -> last action number handled
+let pushing = false, pushAgain = false;
+async function pushPresence(){
+  if(!NR) return;
+  if(pushing){ pushAgain = true; return; }
+  pushing = true;
+  try{
+    do{
+      pushAgain = false;
+      const v = viewFor(), ct = [];
+      for(let p=1;p<6;p++){
+        const tok = S.tokens[p], k = tok && KEYS[tok];
+        if(!k || !k.key || !S.hands) { ct[p] = ''; continue; }
+        const plain = S.hands[p].map(c => c.id).join(',');
+        if(!ENC[p] || ENC[p].plain !== plain || ENC[p].tok !== tok) ENC[p] = {plain, tok, ct: await encrypt(k.key, plain)};
+        ct[p] = ENC[p].ct;
+      }
+      v.ct = ct;
+      let msg = {role:'host', hp:MYPUB, v};
+      if(JSON.stringify(msg).length > 3900){ v.pa = v.pa.slice(-3); }
+      if(JSON.stringify(msg).length > 3900){ v.fx = v.fx.slice(-3); }
+      await NR.presence(msg);
+    } while(pushAgain);
+  }catch(e){ console.warn('presence', e); }
+  pushing = false;
+}
+function assignSeat(tok, name){
+  const free = [1,2,3,4,5].filter(p => !S.human[p]);
+  if(!free.length) return -1;
+  const p = free[0];
+  S.human[p] = true; S.tokens[p] = tok; S.away[p] = false; S.names[p] = name || ('Player ' + (p+1));
+  fx('o', -1, S.names[p] + (S.phase === 'lobby' ? ' joined' : ' took over seat ' + (p+1)));
+  return p;
+}
+function hostPeers(){
+  if(MODE !== 'host' || !NR || !S) return;
+  let changed = false, kick = false;
+  S.peers = S.peers || [];
+  for(const pr of NR.peers()){
+    if(pr.isMe && pr.sameTab) continue;
+    const pz = pr.presence || {};
+    if(pz.role !== 'player' || typeof pz.tok !== 'string') continue;
+    const tok = pz.tok.slice(0, 24), name = cleanName(pz.name);
+    let p = S.tokens.indexOf(tok);
+    const firstSight = !(tok in LASTN);
+    if(firstSight) LASTN[tok] = (pz.act && +pz.act.n) || 0;
+    if(p < 0){ p = assignSeat(tok, name); if(p < 0) continue; changed = true; kick = true; }
+    if(S.peers[p] !== pr.peer){ S.peers[p] = pr.peer; changed = true; }
+    if(name && S.names[p] !== name){ S.names[p] = name; changed = true; }
+    if(S.away[p]){ S.away[p] = false; fx('o', -1, S.names[p] + ' is back'); changed = true; kick = true; }
+    if(typeof pz.pub === 'string' && pz.pub.length < 200 && (!KEYS[tok] || KEYS[tok].pub !== pz.pub)){
+      KEYS[tok] = {pub:pz.pub, key:null};
+      deriveKey(pz.pub).then(k => { if(KEYS[tok] && KEYS[tok].pub === pz.pub){ KEYS[tok].key = k; publish(); } }).catch(() => {});
+    }
+    const a = pz.act;
+    if(!firstSight && a && typeof a.n === 'number' && a.n > LASTN[tok]){ LASTN[tok] = a.n; handleAct(p, a); }
+  }
+  if(kick) advance(); else if(changed) publish();
+}
+function hostPresenceTick(){
+  const present = new Set();
+  for(const pr of NR.peers()){ const pz = pr.presence || {}; if(pz.role === 'player' && typeof pz.tok === 'string') present.add(pz.tok.slice(0,24)); }
+  const now = Date.now();
+  S.seen = S.seen || {};
+  let changed = false;
+  for(let p=1;p<6;p++){
+    const tok = S.tokens[p]; if(!tok) continue;
+    if(present.has(tok)){ S.seen[tok] = now; continue; }
+    if(!S.seen[tok]) S.seen[tok] = now;
+    if(now - S.seen[tok] < 6000) continue;
+    if(S.phase === 'lobby'){ fx('o',-1, S.names[p] + ' left'); S.human[p] = false; S.tokens[p] = null; S.names[p] = SET.bots[p-1]; changed = true; }
+    else if(!S.away[p]){ S.away[p] = true; fx('o',-1, S.names[p] + ' left. A bot is playing for them.'); changed = true; }
+  }
+  if(changed){ if(S.phase === 'lobby') publish(); else advance(); }
+}
+async function connectRoom(code){
+  const room = await roomP;
+  if(!room) throw new Error('unavailable');
+  if(!subtle) throw new Error('nocrypto');
+  await ensureKeys();
+  leaveRoom();
+  NR = await room.join('nattis-' + code);
+  NR.onConnection(ok => { const c = $('#conn'); c.textContent = ok ? 'Connected' : 'Reconnecting…'; c.className = 'conn ' + (ok ? 'ok' : 'bad'); });
+  return NR;
+}
+function leaveRoom(){ if(NR){ try{ NR.leave(); }catch(e){} NR = null; } }
+async function hostGame(resume){
+  try{
+    bumpGen();
+    if(!resume){ S = freshSeats('host'); S.code = rid(5); S.phase = 'lobby'; S.gid = ''; }
+    MODE = 'host'; ME = 0; S.peers = [];
+    for(const k in LASTN) delete LASTN[k];
+    await connectRoom(S.code);
+    NR.onPeers(hostPeers, onRoomError);
+    S.names[0] = myName();
+    if(S.phase === 'lobby'){ showScreen('lobby'); publish(); }
+    else { showScreen('game'); advance(); }
+  }catch(e){ MODE = 'menu'; showScreen('menu'); roomProblem(e); }
+}
+function onRoomError(e){ toast('Lost the connection to the room. Go back to the menu and rejoin.'); }
+function roomProblem(e){
+  const msg = e && e.message === 'nocrypto'
+    ? 'This browser can’t run the encryption online play needs.'
+    : (FIREBASE_CONFIG.databaseURL ? 'Couldn’t reach the game server. Check your internet connection and try again.' : 'Online play isn’t set up on this site yet. The site owner needs to paste a Firebase config into index.html.');
+  openModal('<h2>Can’t open the room here</h2><p>'+msg+'</p><p>You can still play against the computer.</p><div class="row"><button class="btn primary" id="rp-ok">OK</button></div>', 'user');
+  $('#rp-ok').onclick = () => closeModal();
+}
+
+/* ---------- online: guest ---------- */
+let HOSTKEY = null, HOSTPUB = '', MYPEER = '', ACTN = 0, lastHostSeen = 0, decTok = 0;
+async function joinGame(code, rejoin){
+  code = String(code || '').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(code.length < 4){ toast('Enter the 5-character room code from your host.'); return; }
+  try{
+    bumpGen();
+    const tok = (rejoin && JOIN && JOIN.code === code && JOIN.tok) || rid(16);
+    JOIN = {code, tok}; store.set('nattis-join', JOIN);
+    MODE = 'client'; ME = -1; V = null; HAND = []; HOSTKEY = null; HOSTPUB = ''; ACTN = Date.now(); lastFx = -1;
+    await connectRoom(code);
+    await NR.presence({role:'player', name:myName(), tok, pub:MYPUB, act:null});
+    NR.onPeers(clientPeers, onRoomError);
+    lastHostSeen = Date.now();
+    showScreen('lobby'); renderLobby();
+  }catch(e){ MODE = 'menu'; showScreen('menu'); roomProblem(e); }
+}
+function clientPeers(){
+  if(MODE !== 'client' || !NR) return;
+  const ps = NR.peers();
+  const mine = ps.find(p => p.isMe && p.sameTab); if(mine) MYPEER = mine.peer;
+  const host = ps.find(p => !p.sameTab && p.presence && p.presence.role === 'host' && p.presence.v);
+  if(!host){ renderAll(); return; }
+  lastHostSeen = Date.now();
+  const pz = host.presence;
+  V = pz.v; ME = (MYPEER && Array.isArray(V.sp)) ? V.sp.indexOf(MYPEER) : -1;
+  waitingAct = false;
+  if(pz.hp !== HOSTPUB && typeof pz.hp === 'string'){
+    HOSTPUB = pz.hp; HOSTKEY = null;
+    deriveKey(pz.hp).then(k => { if(HOSTPUB === pz.hp){ HOSTKEY = k; clientPeers(); } }).catch(() => {});
+  }
+  const ct = ME > 0 && V.ct ? V.ct[ME] : '';
+  if(HOSTKEY && ct){
+    const t = ++decTok;
+    decrypt(HOSTKEY, ct).then(txt => { if(t === decTok){ HAND = txt ? txt.split(',').filter(Boolean).map(card) : []; renderAll(); } }).catch(() => {});
+  } else if(!ct) HAND = [];
+  if(V.ph === 'lobby' || ME < 0) showScreen('lobby'); else showScreen('game');
+  renderAll();
+}
+setInterval(() => { if(MODE === 'client') renderAll(); }, 2000);
+
+/* ---------- acting ---------- */
+function act(t, v){
+  if(MODE === 'client'){
+    if(!NR) return;
+    ACTN++; waitingAct = true;
+    NR.presence({act:{n:ACTN, t, v}}).catch(() => { waitingAct = false; toast('Not connected. Try again in a moment.'); });
+    renderAll();
+  } else handleAct(ME, {t, v});
+}
+
+/* ---------- effects from the table feed ---------- */
+let lastFx = -1;
+function processFx(){
+  if(!V || !V.fx) return;
+  const max = V.fx.reduce((m,e) => Math.max(m, e.i), 0);
+  if(lastFx < 0 || max < lastFx){ lastFx = max; return; }
+  for(const e of V.fx){
+    if(e.i <= lastFx) continue;
+    if(e.k === 's' && SND[e.t]) SND[e.t]();
+    else if(e.k === 'v') say(e.t);
+    else if(e.k === 'o') toast(e.t);
+    else if(e.k === 'b') bubble(e.p, e.t, 2200);
+    else if(e.k === 't' && SET.talk) bubble(e.p, e.t, 2200);
+  }
+  lastFx = max;
+}
+
+/* ---------- rendering ---------- */
+const nameAt = p => (V && V.nm && cleanName(V.nm[p])) || ('Seat ' + (p+1));
+const slotOf = p => ((p - ME) % 6 + 6) % 6;
+function cardHTML(c, extra){
+  if(isJ(c)){
+    const b = isBig(c);
+    return '<div class="card jk '+(b?'big':'small')+' '+(extra||'')+'" data-id="'+c.id+'" aria-label="'+(b?'Big':'Small')+' Joker"><div class="jt"><span class="star">★</span><span class="jw">'+(b?'BIG':'SMALL')+'</span><span class="jw">JOKER</span></div></div>';
+  }
+  return '<div class="card '+(RED(c.s)?'red ':'')+(extra||'')+'" data-id="'+c.id+'" aria-label="'+rl(c.r)+' of '+SNAME[c.s]+'"><span class="ix">'+rl(c.r)+'<i>'+SYM[c.s]+'</i></span><span class="pip">'+SYM[c.s]+'</span></div>';
+}
+function bubble(p, text, ms){
+  const el = document.querySelector('.seat[data-d="'+slotOf(p)+'"] .bubble');
+  if(!el) return;
+  el.textContent = text; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), ms || 1800);
+}
+let toastT;
+function toast(t){ const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2400); }
+
+function buildSeats(){
+  let h = '';
+  for(let d=0; d<6; d++){
+    const [x,y] = SEAT_POS[d];
+    h += '<div class="seat'+(y>60?' low':'')+'" data-d="'+d+'" style="left:'+x+'%;top:'+y+'%"><div class="bubble"></div><div class="av"><span class="ini"></span></div><div class="nm"></div><div class="st"></div></div>';
+  }
+  $('#seats').innerHTML = h;
+}
+function renderAll(){
+  if(!$('#lobby').hidden) renderLobby();
+  if(!$('#game').hidden) renderGame();
+  processFx();
+  syncModal();
+}
+function renderLobby(){
+  const host = MODE === 'host';
+  $('#lcode').textContent = (host ? S.code : (JOIN && JOIN.code) || '').toUpperCase();
+  $('#l-start').hidden = !host;
+  let note;
+  if(host) note = 'Tap Copy invite and send the link to your friends, or share the room code. They open this site, tap Join a Game and enter the code.';
+  else if(!V) note = Date.now() - lastHostSeen > 8000 ? 'No table found with this code yet. Check the code with your host, or ask them to open the lobby.' : 'Looking for the table…';
+  else if(ME < 0) note = V.ph === 'lobby' ? 'Taking a seat…' : 'This table is full. You can watch the lobby until a seat opens.';
+  else note = 'You’re in seat ' + (ME+1) + '. Waiting for the host to start the game.';
+  $('#lnote').textContent = note;
+  const v = V;
+  if(!v){ $('#seatlist').innerHTML = ''; return; }
+  $('#seatlist').innerHTML = [0,1,2,3,4,5].map(p => {
+    const human = !v.bo[p], you = p === ME;
+    const role = p === 0 ? 'Host' : human ? 'Player' : 'Bot until someone joins';
+    const mv = host && p > 0 && human && v.ph === 'lobby' ? '<button class="mv" data-mv="'+p+'">Move seat</button>' : '';
+    return '<div class="srow '+(team(p)?'tb':'ta')+(human?'':' bot')+'"><span class="dot"></span><div class="who"><b>'+esc(nameAt(p))+(you?' (you)':'')+'</b><span>Seat '+(p+1)+' · '+(team(p)?'Team B':'Team A')+' · '+role+'</span></div>'+mv+'</div>';
+  }).join('');
+  $('#seatlist').querySelectorAll('[data-mv]').forEach(b => b.onclick = () => moveSeat(+b.dataset.mv));
+}
+function moveSeat(p){
+  const free = [1,2,3,4,5].filter(q => !S.human[q] && q !== p);
+  if(!free.length){ toast('No empty seat to move to.'); return; }
+  const q = free.find(x => x > p) || free[0];
+  for(const k of ['names','human','tokens','away','peers']){ const a = S[k]; [a[p], a[q]] = [a[q], a[p]]; }
+  S.names[p] = SET.bots[p-1];
+  publish();
+}
+let collectKey = '';
+function renderGame(){
+  if(!V || ME < 0) return;
+  if(!$('#seats').children.length) buildSeats();
+  const v = V;
+  $('#sa').textContent = v.sc[0]; $('#sb').textContent = v.sc[1];
+  $('#ta').textContent = 'Tricks ' + v.tw[0]; $('#tb').textContent = 'Tricks ' + v.tw[1];
+  $('#la').textContent = 'Team A' + (team(ME) === 0 ? ' (You)' : '');
+  $('#lb').textContent = 'Team B' + (team(ME) === 1 ? ' (You)' : '');
+  let info = '<span class="chip">Trick '+Math.min(v.tn,9)+' of 9</span>';
+  if(v.bd >= 0) info += '<span class="chip">'+esc(nameAt(v.bd))+' · '+(v.bid===9?'GS 9':v.bid===8?'LS 8':'bid '+v.bid)+'</span>';
+  if(v.tr) info += '<span class="chip trump"><span class="suit">'+SYM[v.tr]+'</span>'+SNAME[v.tr]+'</span>';
+  if(MODE !== 'solo') info += '<span class="chip lock" title="Room code">'+esc((v.code||'').toUpperCase())+'</span>';
+  $('#info').innerHTML = info;
+  $('#shuffle').hidden = v.ph !== 'deal';
+  for(let p=0;p<6;p++){
+    const el = document.querySelector('.seat[data-d="'+slotOf(p)+'"]');
+    const nm = nameAt(p);
+    el.classList.toggle('tb', team(p) === 1);
+    el.querySelector('.ini').textContent = nm.charAt(0).toUpperCase() || '?';
+    el.querySelector('.nm').textContent = nm + (v.aw[p] ? ' (bot)' : '');
+    const turn = (v.ph==='bid' && v.bt===p && v.bc<6) || (v.ph==='play' && v.turn===p && v.tk.length<6) || (v.ph==='trump' && v.bd===p) || (v.ph==='raise' && v.bd===p);
+    el.classList.toggle('turn', turn);
+    let st;
+    if(v.ph === 'bid' || v.ph === 'redeal' || v.ph === 'deal'){ const b = v.bids[p]; st = b == null ? '' : b === 'pass' ? 'Pass' : 'Bid ' + b; }
+    else st = v.cn[p] + ' cards';
+    el.querySelector('.st').textContent = st;
+    const av = el.querySelector('.av');
+    av.querySelectorAll('.badge').forEach(b => b.remove());
+    if(p === v.dl) av.insertAdjacentHTML('beforeend','<span class="badge d" title="Dealer">D</span>');
+    if(p === v.bd && v.ph !== 'bid') av.insertAdjacentHTML('beforeend','<span class="badge bd">'+v.bid+'</span>');
+  }
+  // trick in the middle
+  const tEl = $('#trick');
+  const ids = v.tk.map(t => t[1]);
+  [...tEl.children].forEach(n => { if(!ids.includes(n.dataset.id)) n.remove(); });
+  const shown = new Set([...tEl.children].map(n => n.dataset.id));
+  v.tk.forEach(([p,id], i) => {
+    if(shown.has(id)) return;
+    const d = slotOf(p), [x,y] = TRICK_POS[d], [fx_,fy] = FROM[d];
+    const el = document.createElement('div');
+    el.className = 'tcard drop'; el.dataset.id = id; el.dataset.p = p;
+    el.style.cssText = 'left:'+x+'%;top:'+y+'%;--fx:'+fx_+'px;--fy:'+fy+'px;z-index:'+(10+i);
+    el.innerHTML = cardHTML(card(id));
+    tEl.appendChild(el);
+  });
+  if(v.ph === 'collect'){
+    [...tEl.children].forEach(n => n.classList.toggle('win', +n.dataset.p === v.lw));
+    const key = v.gid + v.rd + '-' + v.tn;
+    if(collectKey !== key){
+      collectKey = key;
+      setTimeout(() => {
+        const [x,y] = SEAT_POS[slotOf(v.lw)];
+        [...tEl.children].forEach(n => { n.classList.remove('drop'); n.style.left = x+'%'; n.style.top = y+'%'; n.classList.add('gone'); });
+      }, 900);
+    }
+  }
+  // my hand
+  const trick = v.tk.map(([p,id]) => ({p, c:card(id)}));
+  const mine = v.ph === 'play' && v.turn === ME && v.tk.length < 6 && !waitingAct;
+  const ok = mine ? new Set(legal(HAND, trick).map(c => c.id)) : null;
+  const hEl = $('#hand');
+  hEl.classList.toggle('mine', mine);
+  hEl.innerHTML = sortHand(HAND, v.tr).map(c => cardHTML(c, mine ? (ok.has(c.id) ? 'ok' : 'no') : '')).join('');
+  renderAction(mine, trick);
+}
+function renderAction(mine, trick){
+  const a = $('#action'), v = V;
+  const lost = MODE === 'client' && Date.now() - lastHostSeen > 8000;
+  if(lost){ a.innerHTML = '<span class="hint">The host has disconnected. Waiting for them to come back…</span>'; return; }
+  if(waitingAct){ a.innerHTML = '<span class="hint">Sending…</span>'; return; }
+  if(v.ph === 'bid' && v.bt === ME && v.bc < 6){
+    let h = '<span class="hint">'+(v.bid ? 'Highest: <b>'+esc(nameAt(v.bd))+' '+v.bid+'</b>' : 'Your bid')+'</span>';
+    for(let n=5;n<=9;n++) h += '<button class="bidbtn" data-bid="'+n+'" '+(n<=v.bid?'disabled':'')+'>'+n+'</button>';
+    h += '<button class="bidbtn pass" data-bid="pass">Pass</button>';
+    a.innerHTML = h;
+    a.querySelectorAll('[data-bid]').forEach(b => b.onclick = () => { const x = b.dataset.bid; act('bid', x === 'pass' ? 'pass' : +x); });
+  } else if(v.ph === 'bid'){
+    a.innerHTML = '<span class="hint">Bidding · '+(v.bid ? 'highest <b>'+v.bid+'</b> by '+esc(nameAt(v.bd)) : 'no bids yet')+' · '+esc(nameAt(v.bt))+' is deciding…</span>';
+  } else if(v.ph === 'trump' && v.bd === ME){
+    a.innerHTML = '<span class="hint">You won at <b>'+v.bid+'</b>. Pick trump:</span>' + SUITS.map(s => '<button class="suitbtn '+(RED(s)?'red':'')+'" data-s="'+s+'" aria-label="'+SNAME[s]+'">'+SYM[s]+'</button>').join('');
+    a.querySelectorAll('[data-s]').forEach(b => b.onclick = () => act('trump', b.dataset.s));
+  } else if(v.ph === 'trump'){
+    a.innerHTML = '<span class="hint"><b>'+esc(nameAt(v.bd))+'</b> is choosing trump…</span>';
+  } else if(mine){
+    const lead = leadSuit(trick);
+    a.innerHTML = '<span class="hint"><b>Your turn.</b> '+(trick.length===0 ? 'Lead any card except a Joker.' : lead ? 'Follow '+SNAME[lead]+' '+SYM[lead]+' if you can. Jokers are always allowed.' : 'Play any card.')+'</span>';
+  } else if(v.ph === 'play'){
+    a.innerHTML = '<span class="hint">'+esc(nameAt(v.turn))+' to play…</span>';
+  } else if(v.ph === 'collect'){
+    a.innerHTML = '<span class="hint"><b>'+esc(nameAt(v.lw))+'</b> takes the trick for '+(team(v.lw)?'Team B':'Team A')+'</span>';
+  } else if(v.ph === 'raise'){
+    a.innerHTML = '<span class="hint">'+esc(nameAt(v.bd))+' is deciding on a raise · '+Math.max(0, v.ra ? v.ra.left : 0)+'s</span>';
+  } else if(v.ph === 'redeal'){
+    a.innerHTML = '<span class="hint">Everyone passed. Re-dealing…</span>';
+  } else if(v.ph === 'roundEnd' || v.ph === 'over'){
+    a.innerHTML = '<span class="hint">Round over</span>';
+  } else a.innerHTML = '';
+}
+
+/* hand taps */
+$('#hand').addEventListener('click', e => {
+  const el = e.target.closest('.card'); if(!el || !V) return;
+  if(!(V.ph === 'play' && V.turn === ME && V.tk.length < 6) || waitingAct) return;
+  const trick = V.tk.map(([p,id]) => ({p, c:card(id)}));
+  const c = HAND.find(x => x.id === el.dataset.id); if(!c) return;
+  if(!legal(HAND, trick).some(x => x.id === c.id)){
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+    const lead = leadSuit(trick);
+    toast(trick.length === 0 ? 'You can’t lead with a Joker.' : 'You must follow ' + SNAME[lead] + ' ' + SYM[lead] + '.');
+    return;
+  }
+  act('play', c.id);
+});
+
+/* ---------- modals ---------- */
+let modalKey = null;
+function openModal(html, key){
+  modalKey = key || 'user';
+  const dismiss = modalKey === 'user';
+  $('#sheet').innerHTML = (dismiss ? '<button class="x" id="mx" aria-label="Close">×</button>' : '') + html;
+  $('#modal').hidden = false;
+  if(dismiss) $('#mx').onclick = () => closeModal();
+}
+function closeModal(){ $('#modal').hidden = true; $('#sheet').innerHTML = ''; modalKey = null; syncModal(); }
+$('#modal').addEventListener('click', e => { if(e.target.id === 'modal' && modalKey === 'user') closeModal(); });
+
+function wantedModal(){
+  if(!V || ME < 0 || $('#game').hidden) return null;
+  if(V.ph === 'raise' && V.ra && V.bo[ME] === 0){
+    if(V.bd === ME) return 'raise-b';
+    if(team(ME) === team(V.bd) && V.ra.answers[ME] == null) return 'raise-p';
+  }
+  if((V.ph === 'roundEnd' || V.ph === 'over') && V.res) return 'result-' + V.gid + V.rd;
+  return null;
+}
+function syncModal(){
+  const want = wantedModal();
+  if(modalKey === 'user' && !(want && want.startsWith('raise'))) return;
+  if(want === modalKey){ if(want === 'raise-b') updateRaiseB(); return; }
+  if(!want){ if(modalKey){ $('#modal').hidden = true; $('#sheet').innerHTML = ''; modalKey = null; } return; }
+  if(want === 'raise-b') openRaiseB();
+  else if(want === 'raise-p') openRaiseP();
+  else openResult(want);
+}
+function openRaiseB(){
+  const v = V;
+  const opts = v.ro.map(n => '<button class="btn primary" data-r="'+n+'">Raise to '+raiseName(n)+'</button>').join('');
+  openModal('<h2>Raise the bid?</h2><p>Your team has taken <b>'+v.tw[team(ME)]+' of 5</b> tricks on a bid of '+v.bid+'. Little Slam scores 15, Grand Slam scores 20. Miss it and the other team gets double.</p>'
+    + '<div id="prows"></div><div class="timer"><i id="rt"></i></div><p id="rtl" style="font-size:12px;color:var(--mute);margin:6px 0 0"></p>'
+    + '<div class="row" style="flex-direction:column">'+opts+'<button class="btn" data-r="0">Keep bid at '+v.bid+'</button><button class="btn ghost" id="addt">+10s</button></div>', 'raise-b');
+  $('#sheet').querySelectorAll('[data-r]').forEach(b => b.onclick = () => act('raise', +b.dataset.r));
+  $('#addt').onclick = () => act('more');
+  updateRaiseB();
+}
+function updateRaiseB(){
+  const v = V; if(!v.ra) return;
+  const rows = partnersOfView(v.bd).map(p => '<div class="partner"><span>'+esc(nameAt(p))+'</span><span>'+(v.ra.answers[p] == null ? 'thinking…' : 'can win '+v.ra.answers[p]+' more')+'</span></div>').join('');
+  const pr = $('#prows'); if(pr) pr.innerHTML = rows;
+  const rt = $('#rt'); if(rt) rt.style.width = Math.max(0, v.ra.left / v.ra.total * 100) + '%';
+  const rtl = $('#rtl'); if(rtl) rtl.textContent = Math.max(0, v.ra.left) + 's to decide';
+}
+const partnersOfView = b => [0,1,2,3,4,5].filter(p => p !== b && team(p) === team(b));
+function openRaiseP(){
+  let btns = '';
+  for(let i=0;i<=4;i++) btns += '<button class="bidbtn" data-n="'+i+'">'+i+'</button>';
+  openModal('<h2>'+esc(nameAt(V.bd))+' is thinking about a raise</h2><p>Your team has '+V.tw[team(ME)]+' of 5 tricks. How many of the last 4 tricks can you win?</p><div class="numrow">'+btns+'</div>', 'raise-p');
+  $('#sheet').querySelectorAll('[data-n]').forEach(b => b.onclick = () => act('answer', +b.dataset.n));
+}
+function openResult(key){
+  const v = V, r = v.res, over = v.ph === 'over', isHost = MODE !== 'client';
+  const tn = t => t === 0 ? 'Team A' : 'Team B';
+  const label = r.bid === 9 ? 'Grand Slam' : r.bid === 8 ? 'Little Slam' : 'Bid ' + r.bid;
+  const youGood = (r.bt === team(ME)) === r.made;
+  let head;
+  if(over){
+    const winT = v.sc[0] >= v.sc[1] ? 0 : 1, won = winT === team(ME);
+    head = '<h2>'+tn(winT)+' wins the game</h2><p class="verdict '+(won?'good':'bad')+'">'+(won?'Well played. Your team takes it.':'The other side takes this one.')+'</p>';
+    if(STATS.last !== v.gid){ STATS.last = v.gid; STATS.played++; if(won) STATS.won++; store.set('nattis-stats', STATS); }
+  } else head = '<h2>Round '+v.rd+' result</h2>';
+  const btns = over
+    ? '<button class="btn" id="r-menu">Menu</button>' + (isHost ? '<button class="btn primary" id="r-new">New game</button>' : '<span class="hint" style="flex:1;align-self:center;color:var(--mute);font-size:13px">Waiting for the host…</span>')
+    : '<button class="btn" id="r-past">Review tricks</button>' + (isHost ? '<button class="btn primary" id="r-next">Next round</button>' : '<span style="flex:1;align-self:center;color:var(--mute);font-size:13px;text-align:center">Waiting for the host to deal…</span>');
+  openModal(head
+    + '<p>'+esc(nameAt(r.bidder))+' ('+tn(r.bt)+') played '+label+' with '+SNAME[r.trump]+' '+SYM[r.trump]+' as trump and took <b>'+r.taken+' of 9</b> tricks.</p>'
+    + '<p class="verdict '+(youGood?'good':'bad')+'">'+(r.made ? tn(r.bt)+' made it: +'+r.pts : 'Bid broken: '+tn(1-r.bt)+' +'+r.pts)+'</p>'
+    + '<div class="result"><div class="a"><div class="big">'+v.sc[0]+'</div><small>Team A'+(team(ME)===0?' (You)':'')+'</small></div><div class="b"><div class="big">'+v.sc[1]+'</div><small>Team B'+(team(ME)===1?' (You)':'')+'</small></div></div>'
+    + '<div class="row">'+btns+'</div>', key);
+  if($('#r-new')) $('#r-new').onclick = () => act('again');
+  if($('#r-next')) $('#r-next').onclick = () => act('next');
+  if($('#r-menu')) $('#r-menu').onclick = toMenu;
+  if($('#r-past')) $('#r-past').onclick = openPast;
+}
+
+const RULES = `<h2>Nattis Rules</h2>
+<h3>Overview</h3><p>6 players, 2 teams of 3 seated alternately. 54-card deck (52 + Big Joker + Small Joker). 9 cards each, 9 tricks per round.</p>
+<h3>Card rankings</h3><ul><li><b>Big Joker</b> is the highest card and beats everything.</li><li><b>Small Joker</b> beats all non-trump cards but loses to any trump.</li><li>Within a suit: A K Q J 10 9 8 7 6 5 4 3 2.</li></ul>
+<h3>Bidding</h3><ul><li>Minimum bid is 5 tricks, maximum is 9.</li><li>Each player bids in turn or passes.</li><li>The highest bidder picks the trump suit.</li><li>If no one bids, the cards are re-dealt.</li></ul>
+<h3>Playing</h3><ul><li>The dealer leads the first trick, not the highest bidder.</li><li>The deal rotates one seat each round.</li><li>The winner of each trick leads the next.</li><li>You can’t start a trick with a Joker.</li><li>Follow the lead suit if you can. Jokers can be played anytime.</li><li>If you can’t follow, play any card, including trump.</li><li>Highest card of the lead suit wins unless trumped. Trump beats all non-trump cards.</li></ul>
+<h3>Mid-round raise</h3><p>After 5 tricks, the bidder can raise to Little Slam (8) if their team has at least 4 tricks, or to Grand Slam (9) if they have all 5. Partners say how many more tricks they can win first.</p>
+<h3>Scoring</h3><ul><li>Bid met: points equal to the bid (bid 7 = +7).</li><li>Bid failed: opponents get double the bid.</li><li>Little Slam: 8 tricks on a bid or raise of 8 = +15.</li><li>Grand Slam: all 9 tricks on a bid or raise of 9 = +20.</li><li>No slam declared: extra tricks just score the bid.</li></ul>
+<h3>Winning</h3><p>First team to reach 62 points wins.</p>
+<h3>Online play</h3><p>The host's page deals and checks every move. Each player's hand is encrypted with AES-256-GCM using a key agreed between that player and the host, so the other players' pages can't read it.</p><div class="row"><button class="btn primary" id="rc">Close</button></div>`;
+function openRules(){ openModal(RULES); $('#rc').onclick = () => closeModal(); }
+
+function openPast(){
+  const list = (V && V.pa) || [];
+  const body = list.length ? '<div class="past">' + list.map((s,i) => {
+    const [w, cs] = s.split(':'), wp = +w;
+    const cards = cs.split('.').map(x => ({p:+x[0], c:card(x.slice(1))}));
+    return '<div class="pt"><div class="ph"><span>Trick '+(i+1)+'</span><span>'+esc(nameAt(wp))+' won · '+(team(wp)?'Team B':'Team A')+'</span></div><div class="pc">'+cards.map(x => cardHTML(x.c, x.p===wp?'w':'')).join('')+'</div></div>';
+  }).join('') + '</div>' : '<p>No tricks played yet this round.</p>';
+  openModal('<h2>Past tricks</h2>' + body);
+}
+function openChat(){
+  openModal('<h2>Say something</h2><div class="phrases">'+PHRASES.map((t,i) => '<button class="btn" data-ph="'+i+'">'+esc(t)+'</button>').join('')+'</div>');
+  $('#sheet').querySelectorAll('[data-ph]').forEach(b => b.onclick = () => { act('say', +b.dataset.ph); closeModal(); });
+}
+function nameModal(title, withCode, go, prefill){
+  openModal('<h2>'+title+'</h2>'
+    + '<div class="field"><label for="f-nm">Your name at the table</label><input id="f-nm" maxlength="14" autocomplete="nickname" value="'+esc(SET.name)+'" placeholder="Your name"></div>'
+    + (withCode ? '<div class="field"><label for="f-code">Room code</label><input id="f-code" maxlength="5" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em" placeholder="ABCDE" value="'+esc(prefill||'')+'"></div>' : '')
+    + '<div class="row"><button class="btn primary" id="f-go">'+(withCode?'Join table':'Open lobby')+'</button></div>');
+  const goNow = () => {
+    const nm = cleanName($('#f-nm').value);
+    if(!nm){ toast('Enter your name first.'); return; }
+    SET.name = nm; store.set('nattis-settings', SET);
+    const code = withCode ? $('#f-code').value : '';
+    closeModal(); go(code);
+  };
+  $('#f-go').onclick = goNow;
+  $('#sheet').querySelectorAll('input').forEach(i => i.addEventListener('keydown', e => { if(e.key === 'Enter') goNow(); }));
+}
+
+function openSettings(){
+  const segSpeed = ['slow','normal','fast'].map(v => '<button data-sp="'+v+'" class="'+(SET.speed===v?'on':'')+'">'+v[0].toUpperCase()+v.slice(1)+'</button>').join('');
+  const segRaise = [10,20,30].map(v => '<button data-rs="'+v+'" class="'+(SET.raise===v?'on':'')+'">'+v+'s</button>').join('');
+  const tog = (k, t, sub) => '<div class="tog"><div>'+t+(sub?'<small>'+sub+'</small>':'')+'</div><button class="sw '+(SET[k]?'on':'')+'" data-k="'+k+'" aria-label="'+t+'" aria-pressed="'+!!SET[k]+'"></button></div>';
+  openModal('<h2>Table &amp; bots</h2>'
+    + '<h3>Your profile</h3><div class="field"><label for="f-name">Your name</label><input id="f-name" maxlength="14" value="'+esc(SET.name)+'" placeholder="You"></div>'
+    + '<h3>Sound</h3>' + tog('sound','Card sounds') + tog('voice','Table host voice','Announces trump, jokers, the last trick and whether the bid was made.') + tog('talk','Bot table talk','Bots react to Joker slams, getting trumped, and made or broken bids.')
+    + '<h3>Bot speed</h3><p style="margin:0 0 8px">How long each bot takes to play a card. In online games the host’s setting is used.</p><div class="seg">'+segSpeed+'</div>'
+    + '<h3>Raise time</h3><p style="margin:0 0 8px">How long the bidder gets to decide a raise to LS or GS after 5 tricks. In online games the host’s setting is used.</p><div class="seg">'+segRaise+'</div>'
+    + '<h3>Bot names</h3><div class="botnames">'+[1,2,3,4,5].map(p => '<div class="field"><label for="f-b'+p+'">Seat '+(p+1)+' · '+(team(p)?'Team B':'Team A')+'</label><input id="f-b'+p+'" maxlength="12" value="'+esc(SET.bots[p-1])+'"></div>').join('')+'</div>'
+    + '<div class="row"><button class="btn" id="s-reset">Reset stats</button><button class="btn primary" id="s-save">Save</button></div>');
+  const sh = $('#sheet');
+  sh.querySelectorAll('.sw').forEach(b => b.onclick = () => { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on')); });
+  sh.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.onclick = () => { seg.querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); }));
+  $('#s-reset').onclick = () => { STATS = {played:0, won:0, last:''}; store.set('nattis-stats', STATS); renderStats(); toast('Stats reset'); };
+  $('#s-save').onclick = () => {
+    SET.name = cleanName($('#f-name').value);
+    sh.querySelectorAll('.sw').forEach(b => SET[b.dataset.k] = b.classList.contains('on'));
+    SET.speed = sh.querySelector('[data-sp].on').dataset.sp;
+    SET.raise = +sh.querySelector('[data-rs].on').dataset.rs;
+    const fallback = ['Chotu','Bunty','Dabbu','Laddu','Munna'];
+    for(let p=1;p<=5;p++) SET.bots[p-1] = cleanName($('#f-b'+p).value) || fallback[p-1];
+    store.set('nattis-settings', SET);
+    if(MODE === 'client' && NR) NR.presence({name:myName()}).catch(()=>{});
+    if((MODE === 'solo' || MODE === 'host') && S){
+      S.names[0] = myName();
+      for(let p=1;p<6;p++) if(!S.human[p]) S.names[p] = SET.bots[p-1];
+      publish();
+    }
+    closeModal(); toast('Saved'); renderStats();
+  };
+}
+
+/* ---------- screens ---------- */
+function showScreen(id){
+  for(const s of ['menu','lobby','game']) $('#'+s).hidden = s !== id;
+  if(id === 'game' && !$('#seats').children.length) buildSeats();
+}
+function renderStats(){
+  $('#stats').textContent = STATS.played ? 'Games won: ' + STATS.won + ' of ' + STATS.played : '';
+  const canResume = S && S.phase && S.phase !== 'over' && (S.mode === 'solo' || S.mode === 'host');
+  $('#b-continue').hidden = !canResume;
+  $('#b-continue').textContent = S && S.mode === 'host' ? 'Resume hosted game (' + String(S.code||'').toUpperCase() + ')' : 'Continue game';
+  $('#b-rejoin').hidden = !(JOIN && JOIN.code);
+  if(JOIN && JOIN.code) $('#b-rejoin').textContent = 'Rejoin game (' + JOIN.code.toUpperCase() + ')';
+}
+function toMenu(){
+  bumpGen();
+  if(modalKey){ $('#modal').hidden = true; $('#sheet').innerHTML = ''; modalKey = null; }
+  save(); leaveRoom(); MODE = 'menu'; V = null; lastFx = -1;
+  showScreen('menu'); renderStats();
+}
+function resume(){
+  if(S.mode === 'host') return hostGame(true);
+  bumpGen(); MODE = 'solo'; ME = 0; lastFx = -1;
+  showScreen('game'); $('#trick').innerHTML = '';
+  advance();
+}
+function copyInvite(){
+  const code = ($('#lcode').textContent || '').trim();
+  const text = 'Join my Nattis table: ' + location.origin + location.pathname + '?room=' + code.toLowerCase() + ' (room code ' + code + ')';
+  const fallback = () => toast('Room code: ' + code);
+  try{ navigator.clipboard.writeText(text).then(() => toast('Invite copied'), fallback); }catch(e){ fallback(); }
+}
+
+$('#b-play').onclick = soloGame;
+$('#b-continue').onclick = resume;
+$('#b-host').onclick = () => nameModal('Host a game', false, () => hostGame(false));
+$('#b-join').onclick = () => nameModal('Join a game', true, code => joinGame(code, false));
+$('#b-rejoin').onclick = () => joinGame(JOIN.code, true);
+$('#b-rules').onclick = openRules; $('#i-rules').onclick = openRules;
+$('#b-settings').onclick = openSettings; $('#i-set').onclick = openSettings;
+$('#i-past').onclick = openPast;
+$('#i-chat').onclick = openChat;
+$('#i-home').onclick = toMenu;
+$('#l-leave').onclick = toMenu;
+$('#l-copy').onclick = copyInvite;
+$('#l-start').onclick = () => {
+  if(MODE !== 'host' || S.phase !== 'lobby') return;
+  S.names[0] = myName();
+  startGame();
+};
+
+buildSeats();
+renderStats();
+try{
+  const q = new URLSearchParams(location.search).get('room');
+  if(q){ history.replaceState(null, '', location.pathname); nameModal('Join a game', true, code => joinGame(code, false), q.toUpperCase().slice(0,5)); }
+}catch(e){}
+})();
+</script>
+
+</body>
+</html>
