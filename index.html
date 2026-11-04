@@ -133,6 +133,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 .bidbtn:disabled{opacity:.3}
 .suitbtn{width:58px;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:28px;color:var(--card-black)}
 .suitbtn.red{color:var(--card-red)}
+.suitbtn.nt{font-family:var(--f-display);font-size:12px;font-weight:800;line-height:1.05;letter-spacing:.04em;color:#1d1406;background:var(--brass);border-color:var(--brass)}
 
 /* ---------- Modal ---------- */
 .modal{position:fixed;inset:0;z-index:50;background:#05080ccc;display:flex;align-items:flex-end;justify-content:center;padding-left:max(10px, env(safe-area-inset-left, 0px));padding-right:max(10px, env(safe-area-inset-right, 0px));padding-bottom:env(safe-area-inset-bottom, 0px);padding-top:max(20px, env(safe-area-inset-top, 0px))}
@@ -299,8 +300,9 @@ const FIREBASE_CONFIG = {
 "use strict";
 const $ = s => document.querySelector(s);
 const SUITS = ['S','H','C','D'];
-const SYM = {S:'♠',H:'♥',D:'♦',C:'♣'};
-const SNAME = {S:'Spades',H:'Hearts',D:'Diamonds',C:'Clubs'};
+const SYM = {S:'♠',H:'♥',D:'♦',C:'♣',N:'NT'};
+const SNAME = {S:'Spades',H:'Hearts',D:'Diamonds',C:'Clubs',N:'No Trump'};
+const trumpLabel = t => t === 'N' ? 'No Trump' : SNAME[t] + ' ' + SYM[t];
 const RED = s => s==='H' || s==='D';
 const RL = {11:'J',12:'Q',13:'K',14:'A'};
 const rl = r => RL[r] || String(r);
@@ -483,6 +485,9 @@ function handStrength(h){
   return e;
 }
 function bestSuit(h){
+  const lens = SUITS.map(s => h.filter(c => c.s === s).length);
+  const aces = h.filter(c => c.r === 14).length, kings = h.filter(c => c.r === 13).length;
+  if(Math.max(...lens) <= 3 && aces + kings * .5 >= 2.5) return 'N';
   let bs = 'S', bv = -1;
   for(const s of SUITS){
     const cs = h.filter(c => c.s === s);
@@ -621,8 +626,8 @@ function resolveBids(){
 }
 function chooseTrump(s){
   S.trump = s; S.phase = 'play'; S.leader = S.turn = S.dealer;
-  fx('v', -1, 'Trump is ' + SNAME[s]);
-  fx('o', -1, 'Trump: ' + SNAME[s] + ' ' + SYM[s] + ' · ' + S.names[S.dealer] + ' leads');
+  fx('v', -1, s === 'N' ? 'No trump this round' : 'Trump is ' + SNAME[s]);
+  fx('o', -1, (s === 'N' ? 'No Trump round' : 'Trump: ' + trumpLabel(s)) + ' · ' + S.names[S.dealer] + ' leads');
   advance();
 }
 function playCard(p, c){
@@ -721,7 +726,7 @@ function handleAct(p, a){
   if(t === 'bid' && S.phase === 'bid' && S.bidTurn === p && S.bidCount < 6){
     if(v === 'pass') return placeBid(p, 'pass');
     v = +v; if(Number.isInteger(v) && v >= 5 && v <= 9 && v > S.bid) placeBid(p, v);
-  } else if(t === 'trump' && S.phase === 'trump' && S.bidder === p && SUITS.includes(v)) chooseTrump(v);
+  } else if(t === 'trump' && S.phase === 'trump' && S.bidder === p && (SUITS.includes(v) || v === 'N')) chooseTrump(v);
   else if(t === 'play' && S.phase === 'play' && S.turn === p && S.trick.length < 6){
     const c = S.hands[p].find(x => x.id === v);
     if(c && legal(S.hands[p], S.trick).some(x => x.id === v)) playCard(p, c);
@@ -1007,7 +1012,7 @@ function renderGame(){
   $('#lb').textContent = 'Team B' + (team(ME) === 1 ? ' (You)' : '');
   let info = '<span class="chip">Trick '+Math.min(v.tn,9)+' of 9</span>';
   if(v.bd >= 0) info += '<span class="chip">'+esc(nameAt(v.bd))+' · '+(v.bid===9?'GS 9':v.bid===8?'LS 8':'bid '+v.bid)+'</span>';
-  if(v.tr) info += '<span class="chip trump"><span class="suit">'+SYM[v.tr]+'</span>'+SNAME[v.tr]+'</span>';
+  if(v.tr) info += '<span class="chip trump">'+(v.tr === 'N' ? 'No Trump' : '<span class="suit">'+SYM[v.tr]+'</span>'+SNAME[v.tr])+'</span>';
   if(MODE !== 'solo') info += '<span class="chip lock" title="Room code">'+esc((v.code||'').toUpperCase())+'</span>';
   $('#info').innerHTML = info;
   $('#shuffle').hidden = v.ph !== 'deal';
@@ -1076,7 +1081,7 @@ function renderAction(mine, trick){
   } else if(v.ph === 'bid'){
     a.innerHTML = '<span class="hint">Bidding · '+(v.bid ? 'highest <b>'+v.bid+'</b> by '+esc(nameAt(v.bd)) : 'no bids yet')+' · '+esc(nameAt(v.bt))+' is deciding…</span>';
   } else if(v.ph === 'trump' && v.bd === ME){
-    a.innerHTML = '<span class="hint">You won at <b>'+v.bid+'</b>. Pick trump:</span>' + SUITS.map(s => '<button class="suitbtn '+(RED(s)?'red':'')+'" data-s="'+s+'" aria-label="'+SNAME[s]+'">'+SYM[s]+'</button>').join('');
+    a.innerHTML = '<span class="hint">You won at <b>'+v.bid+'</b>. Pick trump:</span>' + SUITS.map(s => '<button class="suitbtn '+(RED(s)?'red':'')+'" data-s="'+s+'" aria-label="'+SNAME[s]+'">'+SYM[s]+'</button>').join('') + '<button class="suitbtn nt" data-s="N" aria-label="No Trump">No<br>Trump</button>';
     a.querySelectorAll('[data-s]').forEach(b => b.onclick = () => act('trump', b.dataset.s));
   } else if(v.ph === 'trump'){
     a.innerHTML = '<span class="hint"><b>'+esc(nameAt(v.bd))+'</b> is choosing trump…</span>';
@@ -1180,7 +1185,7 @@ function openResult(key){
     ? '<button class="btn" id="r-menu">Menu</button>' + (isHost ? '<button class="btn primary" id="r-new">New game</button>' : '<span class="hint" style="flex:1;align-self:center;color:var(--mute);font-size:13px">Waiting for the host…</span>')
     : '<button class="btn" id="r-past">Review tricks</button>' + (isHost ? '<button class="btn primary" id="r-next">Next round</button>' : '<span style="flex:1;align-self:center;color:var(--mute);font-size:13px;text-align:center">Waiting for the host to deal…</span>');
   openModal(head
-    + '<p>'+esc(nameAt(r.bidder))+' ('+tn(r.bt)+') played '+label+' with '+SNAME[r.trump]+' '+SYM[r.trump]+' as trump and took <b>'+r.taken+' of 9</b> tricks.</p>'
+    + '<p>'+esc(nameAt(r.bidder))+' ('+tn(r.bt)+') played '+label+' '+(r.trump === 'N' ? 'with No Trump' : 'with '+trumpLabel(r.trump)+' as trump')+' and took <b>'+r.taken+' of 9</b> tricks.</p>'
     + '<p class="verdict '+(youGood?'good':'bad')+'">'+(r.made ? tn(r.bt)+' made it: +'+r.pts : 'Bid broken: '+tn(1-r.bt)+' +'+r.pts)+'</p>'
     + '<div class="result"><div class="a"><div class="big">'+v.sc[0]+'</div><small>Team A'+(team(ME)===0?' (You)':'')+'</small></div><div class="b"><div class="big">'+v.sc[1]+'</div><small>Team B'+(team(ME)===1?' (You)':'')+'</small></div></div>'
     + '<div class="row">'+btns+'</div>', key);
@@ -1193,8 +1198,8 @@ function openResult(key){
 const RULES = `<h2>Nattis Rules</h2>
 <h3>Overview</h3><p>6 players, 2 teams of 3 seated alternately. 54-card deck (52 + Big Joker + Small Joker). 9 cards each, 9 tricks per round.</p>
 <h3>Card rankings</h3><ul><li><b>Big Joker</b> is the highest card and beats everything.</li><li><b>Small Joker</b> beats all non-trump cards but loses to any trump.</li><li>Within a suit: A K Q J 10 9 8 7 6 5 4 3 2.</li></ul>
-<h3>Bidding</h3><ul><li>Minimum bid is 5 tricks, maximum is 9.</li><li>Each player bids in turn or passes.</li><li>The highest bidder picks the trump suit.</li><li>If no one bids, the cards are re-dealt.</li></ul>
-<h3>Playing</h3><ul><li>The dealer leads the first trick, not the highest bidder.</li><li>The deal rotates one seat each round.</li><li>The winner of each trick leads the next.</li><li>You can’t start a trick with a Joker.</li><li>Follow the lead suit if you can. Jokers can be played anytime.</li><li>If you can’t follow, play any card, including trump.</li><li>Highest card of the lead suit wins unless trumped. Trump beats all non-trump cards.</li></ul>
+<h3>Bidding</h3><ul><li>Minimum bid is 5 tricks, maximum is 9.</li><li>Each player bids in turn or passes.</li><li>The highest bidder picks the trump suit, or No Trump.</li><li>If no one bids, the cards are re-dealt.</li></ul>
+<h3>Playing</h3><ul><li>The dealer leads the first trick, not the highest bidder.</li><li>The deal rotates one seat each round.</li><li>The winner of each trick leads the next.</li><li>You can’t start a trick with a Joker.</li><li>Follow the lead suit if you can. Jokers can be played anytime.</li><li>If you can’t follow, play any card, including trump.</li><li>Highest card of the lead suit wins unless trumped. Trump beats all non-trump cards.</li><li><b>No Trump:</b> no suit is trump. The Big Joker beats everything, the Small Joker beats every other card, and otherwise the highest card of the lead suit wins. Scoring is the same.</li></ul>
 <h3>Mid-round raise</h3><p>After 5 tricks, the bidder can raise to Little Slam (8) if their team has at least 4 tricks, or to Grand Slam (9) if they have all 5. Partners say how many more tricks they can win first.</p>
 <h3>Scoring</h3><ul><li>Bid met: points equal to the bid (bid 7 = +7).</li><li>Bid failed: opponents get double the bid.</li><li>Little Slam: 8 tricks on a bid or raise of 8 = +15.</li><li>Grand Slam: all 9 tricks on a bid or raise of 9 = +20.</li><li>No slam declared: extra tricks just score the bid.</li></ul>
 <h3>Winning</h3><p>First team to reach 62 points wins.</p>
