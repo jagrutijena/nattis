@@ -63,7 +63,17 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 .team .sc{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1;font-variant-numeric:tabular-nums}
 .team.a .sc{color:var(--team-a)} .team.b .sc{color:var(--team-b)}
 .team .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.team .tk{font-size:12.5px;font-variant-numeric:tabular-nums}
+.team .tk{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.team .sc small{font-size:11px;font-weight:600;color:var(--mute);margin-left:2px;letter-spacing:.02em}
+.pips{display:flex;gap:3px;margin-top:2px}
+.team.b .pips{justify-content:flex-end}
+.pips i{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--line);flex:0 0 auto}
+.team.a .pips i.on{background:var(--team-a);border-color:var(--team-a)}
+.team.b .pips i.on{background:var(--team-b);border-color:var(--team-b)}
+.pips i.goal{box-shadow:0 0 0 2px var(--brass)}
+.team.bump{animation:bump .5s ease}
+@keyframes bump{30%{transform:scale(1.05);box-shadow:0 0 0 2px var(--brass)}}
+@media (max-width:380px){.pips i{width:7px;height:7px;gap:2px}.team{padding:6px 8px;gap:8px}}
 .team .meta{min-width:0;display:flex;flex-direction:column;gap:2px}
 .target{font-size:10.5px;color:var(--mute);text-align:center;line-height:1.2;font-variant-numeric:tabular-nums;flex:0 0 auto}
 .target b{display:block;font-family:var(--f-display);font-size:15px;color:var(--fg)}
@@ -252,9 +262,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
   <section id="game" class="screen" hidden>
     <header class="bar">
       <div class="bar-row">
-        <div class="team a"><div class="sc" id="sa">0</div><div class="meta"><span class="lbl" id="la">Team A</span><span class="tk" id="ta">Tricks 0</span></div></div>
+        <div class="team a"><div class="sc" id="sa">0<small>pts</small></div><div class="meta"><span class="lbl" id="la">Team A</span><span class="tk" id="ta">Tricks 0</span><span class="pips" id="pa"></span></div></div>
         <div class="target"><b>62</b>to win</div>
-        <div class="team b"><div class="sc" id="sb">0</div><div class="meta"><span class="lbl" id="lb">Team B</span><span class="tk" id="tb">Tricks 0</span></div></div>
+        <div class="team b"><div class="sc" id="sb">0<small>pts</small></div><div class="meta"><span class="lbl" id="lb">Team B</span><span class="tk" id="tb">Tricks 0</span><span class="pips" id="pb"></span></div></div>
       </div>
       <div class="bar-row">
         <div class="info" id="info"></div>
@@ -1006,8 +1016,20 @@ function renderGame(){
   if(!V || ME < 0) return;
   if(!$('#seats').children.length) buildSeats();
   const v = V;
-  $('#sa').textContent = v.sc[0]; $('#sb').textContent = v.sc[1];
-  $('#ta').textContent = 'Tricks ' + v.tw[0]; $('#tb').textContent = 'Tricks ' + v.tw[1];
+  $('#sa').innerHTML = v.sc[0] + '<small>pts</small>'; $('#sb').innerHTML = v.sc[1] + '<small>pts</small>';
+  for(const t of [0,1]){
+    const n = v.tw[t] || 0, need = v.bd >= 0 && team(v.bd) === t && v.ph !== 'bid' ? v.bid : 0;
+    const tk = $(t ? '#tb' : '#ta');
+    const txt = n + (n === 1 ? ' trick' : ' tricks') + (need ? ' · need ' + need : '');
+    if(tk.textContent !== txt){
+      const grew = +(tk.dataset.n || 0) < n;
+      tk.textContent = txt; tk.dataset.n = n;
+      if(grew){ const box = tk.closest('.team'); box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump'); }
+    }
+    let pips = '';
+    for(let i=0;i<9;i++) pips += '<i class="'+(i < n ? 'on' : '')+(need && i === need-1 ? ' goal' : '')+'"></i>';
+    $(t ? '#pb' : '#pa').innerHTML = pips;
+  }
   $('#la').textContent = 'Team A' + (team(ME) === 0 ? ' (You)' : '');
   $('#lb').textContent = 'Team B' + (team(ME) === 1 ? ' (You)' : '');
   let info = '<span class="chip">Trick '+Math.min(v.tn,9)+' of 9</span>';
