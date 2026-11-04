@@ -220,6 +220,46 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
 .lock{font-size:11px;color:var(--brass);letter-spacing:.06em}
 .phrases{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .phrases .btn{padding:11px 10px;font-size:14px}
+
+/* phone fit */
+body{touch-action:manipulation}
+.field input{font-size:16px}
+#hand .card{margin-left:var(--ov, calc(var(--cw) * -0.24))}
+#hand .card:first-child{margin-left:0}
+@media (hover:none){#hand.mine .card.ok:hover{transform:translateY(-10px)}}
+.info{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.info::-webkit-scrollbar{display:none}
+.seat{width:76px}
+.nm{max-width:76px}
+.seat.top .bubble{bottom:auto;top:calc(100% + 2px)}
+.seat.off .av{opacity:.45;border-style:dashed}
+html.short .bar{padding-top:6px;padding-bottom:4px;gap:4px}
+html.short .team{padding:4px 8px}
+html.short .team .sc{font-size:22px}
+html.short .av{width:34px;height:34px;font-size:15px}
+html.short #action{min-height:44px;font-size:13px}
+html.short #hand-wrap{padding-bottom:6px}
+html.short .menu-inner{gap:12px}
+html.short .mark{width:60px;height:60px;font-size:32px;border-radius:16px}
+html.short .menu-inner h1{font-size:40px}
+html.short .btn{padding:11px 16px}
+html.tiny .pips,html.tiny .st,html.tiny .team .lbl{display:none}
+@media (max-width:420px){.chip .tn,.chip.lock{display:none}}
+@media (max-width:460px){.chip.bidc{display:none}}
+@media (max-width:400px){
+  .chip .tw{display:none}
+  .chip{padding:4px 8px;font-size:12.5px}
+  .ib{width:31px;height:31px;border-radius:9px}
+  .icons{gap:3px}
+  .team{gap:6px;padding:5px 8px}
+  .team .sc{font-size:22px}
+  .team .tk{overflow:hidden;text-overflow:ellipsis}
+  .pips{gap:2px}.pips i{width:6px;height:6px}
+}
+@media (max-width:345px){.target{display:none}}
+#rotate{display:none;position:fixed;inset:0;z-index:80;background:var(--ink);color:var(--fg);align-items:center;justify-content:center;flex-direction:column;gap:10px;text-align:center;padding:24px;font-family:var(--f-display);font-weight:700;font-size:20px}
+#rotate small{font-family:var(--f-body);font-weight:400;font-size:14px;color:var(--mute)}
+@media (orientation:landscape) and (max-height:480px) and (pointer:coarse){#rotate{display:flex}}
 </style>
 
 <div id="app">
@@ -288,6 +328,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--brass);outline-
   </section>
 
   <div id="modal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
+  <div id="rotate"><div>Turn your phone upright to play</div><small>The table is laid out for portrait screens.</small></div>
   <div id="toast" role="status"></div>
 </div>
 
@@ -335,11 +376,13 @@ const store = {
   set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
   del(k){ try{ localStorage.removeItem(k); }catch(e){} }
 };
-const DEF = {name:'', sound:true, voice:true, talk:true, speed:'normal', raise:20, bots:['Golu','Chintu','Bablu','Tuku','Pintu']};
+const DEF = {name:'', sound:true, voice:true, talk:true, speed:'normal', raise:20, away:5, bots:['Golu','Chintu','Bablu','Tuku','Pintu']};
 let SET = Object.assign({}, DEF, store.get('nattis-settings') || {});
 if(!Array.isArray(SET.bots) || SET.bots.length !== 5) SET.bots = DEF.bots.slice();
 let STATS = store.get('nattis-stats') || {played:0, won:0, last:''};
 let JOIN = store.get('nattis-join');        // {code, tok, name} for rejoining as a guest
+const graceMs = () => SET.away === 0 ? Infinity : (+SET.away || 5) * 60000;
+const fmtT = sec => Math.floor(sec/60) + ':' + String(sec%60).padStart(2,'0');
 const myName = () => cleanName(SET.name) || 'You';
 const delay = () => ({slow:1150, normal:700, fast:340})[SET.speed] || 700;
 
@@ -361,25 +404,29 @@ function firebaseRoom(){
   return { join: async (name) => {
     const base = db.ref('rooms/' + name + '/peers'), me = base.child(myPeer), cref = db.ref('.info/connected');
     let mine = {}, snap = [], peerFns = [], connFns = [], connected = false;
-    const write = () => me.set({j: JSON.stringify(mine), t: firebase.database.ServerValue.TIMESTAMP});
+    const TS = firebase.database.ServerValue.TIMESTAMP;
+    const write = () => me.set({j: JSON.stringify(mine), t: TS, on: true});
+    const armDrop = () => me.onDisconnect().update({on: false, t: TS});
     const self = () => Object.freeze({peer:myPeer, isMe:true, sameTab:true, by:null, kind:'viewer', guest:false, presence:Object.freeze(Object.assign({}, mine)), updatedAt:Date.now()});
     const onVal = s => {
       const v = s.val() || {};
       snap = Object.keys(v).filter(k => k !== myPeer).map(k => {
         let pz = {}; try{ pz = JSON.parse(v[k].j) || {}; }catch(e){}
-        return Object.freeze({peer:k, isMe:false, sameTab:false, by:null, kind:'viewer', guest:false, presence:pz, updatedAt:Date.now()});
+        const on = v[k].on !== false, t = +v[k].t || 0;
+        if(!on && t && Date.now() - t > 2 * 3600000) base.child(k).remove().catch(() => {});
+        return Object.freeze({peer:k, isMe:false, sameTab:false, by:null, kind:'viewer', guest:false, presence:pz, online:on, t, updatedAt:Date.now()});
       });
       snap.push(self());
       peerFns.forEach(f => { try{ f({peers:snap}); }catch(e){ console.error(e); } });
     };
     const onConn = s => {
       connected = !!s.val();
-      if(connected){ me.onDisconnect().remove(); write(); }
+      if(connected){ armDrop(); write(); }
       connFns.forEach(f => f(connected));
     };
     base.on('value', onVal);
     cref.on('value', onConn);
-    await me.onDisconnect().remove();
+    await armDrop();
     await write();
     return {
       name,
@@ -563,11 +610,12 @@ function talk(p, kind){ if(isBot(p)) fx('t', p, pick(TALK[kind])); }
 const save = () => { if(S) store.set('nattis-game', S); };
 
 function freshSeats(mode){
-  return {mode, names:[myName()].concat(SET.bots), human:[true,false,false,false,false,false], tokens:[null,null,null,null,null,null], away:[false,false,false,false,false,false], peers:[], fx:[], fxN:0};
+  return {mode, names:[myName()].concat(SET.bots), human:[true,false,false,false,false,false], tokens:[null,null,null,null,null,null], away:[false,false,false,false,false,false], peers:[], pids:[], lastn:{}, offSince:{}, fx:[], fxN:0};
 }
 function soloGame(){
   bumpGen(); MODE = 'solo'; ME = 0; leaveRoom();
   S = freshSeats('solo');
+  keepAwake(true);
   startGame();
 }
 function startGame(){
@@ -716,7 +764,7 @@ function nextRound(){ S.dealer = (S.dealer+1)%6; S.round++; startRound(); }
 /* host clock: raise countdown and seat presence */
 setInterval(() => {
   if(!S || (MODE !== 'solo' && MODE !== 'host')) return;
-  if(MODE === 'host' && NR) hostPresenceTick();
+  if(MODE === 'host' && NR){ hostPresenceTick(); touchAuto(); }
   if(S.phase === 'raise' && S.raise){
     S.raise.left--;
     if(S.raise.left <= 0){ if(isBot(S.bidder)) botDecide(); else applyRaise(0); }
@@ -755,6 +803,8 @@ function viewFor(){
     ph:S.phase, code:S.code || '', gid:S.gid || '', sc:S.scores || [0,0], dl:S.dealer, rd:S.round,
     nm:S.names, bo:S.names.map((_,p) => isBot(p) ? 1 : 0), aw:S.away.map(x => x?1:0),
     sp:[0,1,2,3,4,5].map(p => S.tokens[p] ? (sp[p] || '') : ''),
+    pi:[0,1,2,3,4,5].map(p => S.tokens[p] ? ((S.pids || [])[p] || '') : ''),
+    of:[0,1,2,3,4,5].map(p => { const t = S.offSince && S.offSince[p]; if(!t || S.away[p]) return -1; const g = graceMs(); return g === Infinity ? 0 : Math.max(1, Math.ceil((g - (Date.now() - t)) / 1000)); }),
     bids:S.bids || [], bt:S.bidTurn, bc:S.bidCount, bid:S.bid || 0, bd:S.bidder == null ? -1 : S.bidder, tr:S.trump || null,
     tk:(S.trick || []).map(t => [t.p, t.c.id]), tw:S.tricks || [0,0], tn:S.trickNo || 1, turn:S.turn, lw:S.lastW,
     pa:(S.past || []).map(t => t.w + ':' + t.cards.map(x => x.p + x.c.id).join('.')),
@@ -774,7 +824,7 @@ function publish(){
 /* ---------- online: host ---------- */
 const KEYS = {};       // token -> {pub, key}
 const ENC = {};        // seat -> {plain, ct}
-const LASTN = {};      // token -> last action number handled
+let LASTN = {};       // token -> last action number handled (kept in S.lastn)
 let pushing = false, pushAgain = false;
 async function pushPresence(){
   if(!NR) return;
@@ -788,7 +838,7 @@ async function pushPresence(){
         const tok = S.tokens[p], k = tok && KEYS[tok];
         if(!k || !k.key || !S.hands) { ct[p] = ''; continue; }
         const plain = S.hands[p].map(c => c.id).join(',');
-        if(!ENC[p] || ENC[p].plain !== plain || ENC[p].tok !== tok) ENC[p] = {plain, tok, ct: await encrypt(k.key, plain)};
+        if(!ENC[p] || ENC[p].plain !== plain || ENC[p].tok !== tok || ENC[p].pub !== k.pub) ENC[p] = {plain, tok, pub:k.pub, ct: await encrypt(k.key, plain)};
         ct[p] = ENC[p].ct;
       }
       v.ct = ct;
@@ -814,6 +864,7 @@ function hostPeers(){
   S.peers = S.peers || [];
   for(const pr of NR.peers()){
     if(pr.isMe && pr.sameTab) continue;
+    if(pr.online === false) continue;
     const pz = pr.presence || {};
     if(pz.role !== 'player' || typeof pz.tok !== 'string') continue;
     const tok = pz.tok.slice(0, 24), name = cleanName(pz.name);
@@ -824,6 +875,9 @@ function hostPeers(){
     if(S.peers[p] !== pr.peer){ S.peers[p] = pr.peer; changed = true; }
     if(name && S.names[p] !== name){ S.names[p] = name; changed = true; }
     if(S.away[p]){ S.away[p] = false; fx('o', -1, S.names[p] + ' is back'); changed = true; kick = true; }
+    if(S.offSince && S.offSince[p]){ delete S.offSince[p]; if(S.phase !== 'lobby') fx('o', -1, S.names[p] + ' reconnected'); changed = true; kick = true; }
+    const pid = typeof pz.pid === 'string' ? pz.pid.slice(0, 12) : '';
+    if(S.pids[p] !== pid){ S.pids[p] = pid; changed = true; }
     if(typeof pz.pub === 'string' && pz.pub.length < 200 && (!KEYS[tok] || KEYS[tok].pub !== pz.pub)){
       KEYS[tok] = {pub:pz.pub, key:null};
       deriveKey(pz.pub).then(k => { if(KEYS[tok] && KEYS[tok].pub === pz.pub){ KEYS[tok].key = k; publish(); } }).catch(() => {});
@@ -833,21 +887,41 @@ function hostPeers(){
   }
   if(kick) advance(); else if(changed) publish();
 }
+let tickN = 0;
 function hostPresenceTick(){
+  tickN++;
+  if(typeof NR.connected === 'function' && !NR.connected()){ S.offSince = {}; return; }  // our own connection is down: judge nobody
   const present = new Set();
-  for(const pr of NR.peers()){ const pz = pr.presence || {}; if(pz.role === 'player' && typeof pz.tok === 'string') present.add(pz.tok.slice(0,24)); }
-  const now = Date.now();
-  S.seen = S.seen || {};
-  let changed = false;
+  for(const pr of NR.peers()){ if(pr.online === false) continue; const pz = pr.presence || {}; if(pz.role === 'player' && typeof pz.tok === 'string') present.add(pz.tok.slice(0,24)); }
+  const now = Date.now(), grace = graceMs();
+  S.offSince = S.offSince || {};
+  let changed = false, anyOff = false;
   for(let p=1;p<6;p++){
     const tok = S.tokens[p]; if(!tok) continue;
-    if(present.has(tok)){ S.seen[tok] = now; continue; }
-    if(!S.seen[tok]) S.seen[tok] = now;
-    if(now - S.seen[tok] < 6000) continue;
-    if(S.phase === 'lobby'){ fx('o',-1, S.names[p] + ' left'); S.human[p] = false; S.tokens[p] = null; S.names[p] = SET.bots[p-1]; changed = true; }
-    else if(!S.away[p]){ S.away[p] = true; fx('o',-1, S.names[p] + ' left. A bot is playing for them.'); changed = true; }
+    if(present.has(tok)){ if(S.offSince[p]){ delete S.offSince[p]; changed = true; } continue; }
+    if(S.away[p]) continue;
+    if(!S.offSince[p]){ S.offSince[p] = now; changed = true; if(S.phase !== 'lobby') fx('o', -1, S.names[p] + ' lost connection. Waiting for them.'); }
+    anyOff = true;
+    if(now - S.offSince[p] < grace) continue;
+    delete S.offSince[p];
+    if(S.phase === 'lobby') removeSeat(p);
+    else { S.away[p] = true; fx('o', -1, S.names[p] + ' didn’t come back. A bot is playing for them.'); }
+    changed = true;
   }
   if(changed){ if(S.phase === 'lobby') publish(); else advance(); }
+  else if(anyOff && tickN % 5 === 0) publish();
+}
+function removeSeat(p){
+  fx('o', -1, S.names[p] + ' left');
+  S.human[p] = false; S.tokens[p] = null; S.away[p] = false; S.names[p] = SET.bots[p-1];
+  if(S.offSince) delete S.offSince[p];
+}
+function botForSeat(p){
+  if(MODE !== 'host' || !S.human[p] || S.away[p]) return;
+  if(S.phase === 'lobby'){ removeSeat(p); return publish(); }
+  S.away[p] = true; if(S.offSince) delete S.offSince[p];
+  fx('o', -1, 'A bot is playing for ' + S.names[p] + ' until they’re back.');
+  advance();
 }
 async function connectRoom(code){
   const room = await roomP;
@@ -865,9 +939,10 @@ async function hostGame(resume){
     bumpGen();
     if(!resume){ S = freshSeats('host'); S.code = rid(5); S.phase = 'lobby'; S.gid = ''; }
     MODE = 'host'; ME = 0; S.peers = [];
-    for(const k in LASTN) delete LASTN[k];
+    S.lastn = S.lastn || {}; LASTN = S.lastn; S.offSince = {}; S.pids = S.pids || [];
     await connectRoom(S.code);
     NR.onPeers(hostPeers, onRoomError);
+    setAuto('host'); keepAwake(true);
     S.names[0] = myName();
     if(S.phase === 'lobby'){ showScreen('lobby'); publish(); }
     else { showScreen('game'); advance(); }
@@ -883,17 +958,19 @@ function roomProblem(e){
 }
 
 /* ---------- online: guest ---------- */
-let HOSTKEY = null, HOSTPUB = '', MYPEER = '', ACTN = 0, lastHostSeen = 0, decTok = 0;
+let HOSTON = true, HOSTKEY = null, HOSTPUB = '', MYPEER = '', ACTN = 0, lastHostSeen = 0, decTok = 0;
 async function joinGame(code, rejoin){
   code = String(code || '').toLowerCase().replace(/[^a-z0-9]/g,'');
   if(code.length < 4){ toast('Enter the 5-character room code from your host.'); return; }
   try{
     bumpGen();
-    const tok = (rejoin && JOIN && JOIN.code === code && JOIN.tok) || rid(16);
-    JOIN = {code, tok}; store.set('nattis-join', JOIN);
+    const same = rejoin && JOIN && JOIN.code === code;
+    const tok = (same && JOIN.tok) || rid(16), pid = (same && JOIN.pid) || rid(10);
+    JOIN = {code, tok, pid}; store.set('nattis-join', JOIN);
     MODE = 'client'; ME = -1; V = null; HAND = []; HOSTKEY = null; HOSTPUB = ''; ACTN = Date.now(); lastFx = -1;
     await connectRoom(code);
-    await NR.presence({role:'player', name:myName(), tok, pub:MYPUB, act:null});
+    await NR.presence({role:'player', name:myName(), tok, pid, pub:MYPUB, act:null});
+    setAuto('join'); keepAwake(true);
     NR.onPeers(clientPeers, onRoomError);
     lastHostSeen = Date.now();
     showScreen('lobby'); renderLobby();
@@ -903,11 +980,15 @@ function clientPeers(){
   if(MODE !== 'client' || !NR) return;
   const ps = NR.peers();
   const mine = ps.find(p => p.isMe && p.sameTab); if(mine) MYPEER = mine.peer;
-  const host = ps.find(p => !p.sameTab && p.presence && p.presence.role === 'host' && p.presence.v);
-  if(!host){ renderAll(); return; }
+  const hosts = ps.filter(p => !p.sameTab && p.presence && p.presence.role === 'host' && p.presence.v);
+  const host = hosts.find(h => h.online !== false) || hosts.sort((a,b) => (b.t||0) - (a.t||0))[0];
+  if(!host){ HOSTON = false; renderAll(); return; }
+  HOSTON = host.online !== false;
   lastHostSeen = Date.now();
   const pz = host.presence;
-  V = pz.v; ME = (MYPEER && Array.isArray(V.sp)) ? V.sp.indexOf(MYPEER) : -1;
+  V = pz.v;
+  ME = (JOIN && JOIN.pid && Array.isArray(V.pi)) ? V.pi.indexOf(JOIN.pid) : -1;
+  if(ME < 0) ME = (MYPEER && Array.isArray(V.sp)) ? V.sp.indexOf(MYPEER) : -1;
   waitingAct = false;
   if(pz.hp !== HOSTPUB && typeof pz.hp === 'string'){
     HOSTPUB = pz.hp; HOSTKEY = null;
@@ -921,13 +1002,70 @@ function clientPeers(){
   if(V.ph === 'lobby' || ME < 0) showScreen('lobby'); else showScreen('game');
   renderAll();
 }
-setInterval(() => { if(MODE === 'client') renderAll(); }, 2000);
+setInterval(() => {
+  if(MODE !== 'client') return;
+  if(NR && NR.peers().some(p => !p.sameTab && p.presence && p.presence.role === 'host' && p.online !== false)){ lastHostSeen = Date.now(); HOSTON = true; }
+  touchAuto(); renderAll();
+}, 2000);
+
+/* ---------- staying connected ---------- */
+function setAuto(k){ store.set('nattis-auto', {k, ts:Date.now()}); }
+let autoT = 0;
+function touchAuto(){
+  if(Date.now() - autoT < 30000) return;
+  autoT = Date.now();
+  const a = store.get('nattis-auto'); if(a){ a.ts = Date.now(); store.set('nattis-auto', a); }
+}
+function autoResume(){
+  const a = store.get('nattis-auto');
+  if(!a || Date.now() - a.ts > 30 * 60000) return;
+  if(a.k === 'host' && S && S.mode === 'host' && S.phase && S.phase !== 'over') hostGame(true);
+  else if(a.k === 'join' && JOIN && JOIN.code) joinGame(JOIN.code, true);
+}
+let WL = null;
+async function keepAwake(on){
+  try{
+    if(on && !WL && navigator.wakeLock && document.visibilityState === 'visible'){
+      WL = await navigator.wakeLock.request('screen');
+      WL.addEventListener('release', () => { WL = null; });
+    } else if(!on && WL){ const w = WL; WL = null; await w.release(); }
+  }catch(e){ WL = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible' || MODE === 'menu') return;
+  keepAwake(true);
+  if(MODE === 'host') hostPeers(); else if(MODE === 'client') clientPeers();
+});
+
+/* ---------- fit the table to the screen ---------- */
+function fit(){
+  const r = document.documentElement, vv = window.visualViewport;
+  const W = r.clientWidth || innerWidth, H = Math.round(vv ? vv.height : innerHeight);
+  const cw = Math.max(36, Math.min(74, (W - 24) / 7.1, H * 0.095));
+  const tw = Math.max(30, Math.min(62, W * 0.13, H * 0.068));
+  r.style.setProperty('--cw', cw.toFixed(1) + 'px');
+  r.style.setProperty('--tw', tw.toFixed(1) + 'px');
+  r.classList.toggle('short', H < 700);
+  r.classList.toggle('tiny', H < 580);
+  fitHand();
+}
+function fitHand(){
+  const h = $('#hand'); if(!h) return;
+  const n = h.children.length; if(n < 2) return;
+  const cw = parseFloat(document.documentElement.style.getPropertyValue('--cw')) || 60;
+  const avail = (h.parentElement.clientWidth || innerWidth) - 24;
+  h.style.setProperty('--ov', Math.min(-0.2 * cw, (avail - n * cw) / (n - 1)).toFixed(1) + 'px');
+}
+addEventListener('resize', fit);
+if(window.visualViewport) visualViewport.addEventListener('resize', fit);
+addEventListener('orientationchange', () => setTimeout(fit, 300));
 
 /* ---------- acting ---------- */
 function act(t, v){
   if(MODE === 'client'){
     if(!NR) return;
     ACTN++; waitingAct = true;
+    const n = ACTN; setTimeout(() => { if(waitingAct && ACTN === n){ waitingAct = false; renderAll(); } }, 5000);
     NR.presence({act:{n:ACTN, t, v}}).catch(() => { waitingAct = false; toast('Not connected. Try again in a moment.'); });
     renderAll();
   } else handleAct(ME, {t, v});
@@ -973,7 +1111,8 @@ function buildSeats(){
   let h = '';
   for(let d=0; d<6; d++){
     const [x,y] = SEAT_POS[d];
-    h += '<div class="seat'+(y>60?' low':'')+'" data-d="'+d+'" style="left:'+x+'%;top:'+y+'%"><div class="bubble"></div><div class="av"><span class="ini"></span></div><div class="nm"></div><div class="st"></div></div>';
+    const lx = x < 20 ? 'max(40px, '+x+'%)' : x > 80 ? 'min(calc(100% - 40px), '+x+'%)' : x+'%';
+    h += '<div class="seat'+(y>60?' low':'')+(y<15?' top':'')+'" data-d="'+d+'" style="left:'+lx+';top:'+y+'%"><div class="bubble"></div><div class="av"><span class="ini"></span></div><div class="nm"></div><div class="st"></div></div>';
   }
   $('#seats').innerHTML = h;
 }
@@ -989,25 +1128,29 @@ function renderLobby(){
   $('#l-start').hidden = !host;
   let note;
   if(host) note = 'Tap Copy invite and send the link to your friends, or share the room code. They open this site, tap Join a Game and enter the code.';
+  else if(V && !HOSTON) note = 'The host is offline. You’ll be back at the table as soon as they return.';
   else if(!V) note = Date.now() - lastHostSeen > 8000 ? 'No table found with this code yet. Check the code with your host, or ask them to open the lobby.' : 'Looking for the table…';
   else if(ME < 0) note = V.ph === 'lobby' ? 'Taking a seat…' : 'This table is full. You can watch the lobby until a seat opens.';
   else note = 'You’re in seat ' + (ME+1) + '. Waiting for the host to start the game.';
-  $('#lnote').textContent = note;
+  $('#lnote').textContent = note + (host ? ' Keep this screen open while you host: the game pauses if your phone locks.' : '');
   const v = V;
   if(!v){ $('#seatlist').innerHTML = ''; return; }
   $('#seatlist').innerHTML = [0,1,2,3,4,5].map(p => {
     const human = !v.bo[p], you = p === ME;
-    const role = p === 0 ? 'Host' : human ? 'Player' : 'Bot until someone joins';
-    const mv = host && p > 0 && human && v.ph === 'lobby' ? '<button class="mv" data-mv="'+p+'">Move seat</button>' : '';
+    const off = !!(v.of && v.of[p] >= 0);
+    const role = p === 0 ? 'Host' : human ? (off ? 'Offline' + (v.of[p] ? ' · seat frees in ' + fmtT(v.of[p]) : '') : 'Player') : 'Bot until someone joins';
+    const mv = host && p > 0 && human && v.ph === 'lobby' ? (off ? '<button class="mv" data-rm="'+p+'">Remove</button>' : '<button class="mv" data-mv="'+p+'">Move seat</button>') : '';
     return '<div class="srow '+(team(p)?'tb':'ta')+(human?'':' bot')+'"><span class="dot"></span><div class="who"><b>'+esc(nameAt(p))+(you?' (you)':'')+'</b><span>Seat '+(p+1)+' · '+(team(p)?'Team B':'Team A')+' · '+role+'</span></div>'+mv+'</div>';
   }).join('');
   $('#seatlist').querySelectorAll('[data-mv]').forEach(b => b.onclick = () => moveSeat(+b.dataset.mv));
+  $('#seatlist').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => botForSeat(+b.dataset.rm));
 }
 function moveSeat(p){
   const free = [1,2,3,4,5].filter(q => !S.human[q] && q !== p);
   if(!free.length){ toast('No empty seat to move to.'); return; }
   const q = free.find(x => x > p) || free[0];
-  for(const k of ['names','human','tokens','away','peers']){ const a = S[k]; [a[p], a[q]] = [a[q], a[p]]; }
+  S.pids = S.pids || [];
+  for(const k of ['names','human','tokens','away','peers','pids']){ const a = S[k]; [a[p], a[q]] = [a[q], a[p]]; }
   S.names[p] = SET.bots[p-1];
   publish();
 }
@@ -1020,7 +1163,7 @@ function renderGame(){
   for(const t of [0,1]){
     const n = v.tw[t] || 0, need = v.bd >= 0 && team(v.bd) === t && v.ph !== 'bid' ? v.bid : 0;
     const tk = $(t ? '#tb' : '#ta');
-    const txt = n + (n === 1 ? ' trick' : ' tricks') + (need ? ' · need ' + need : '');
+    const txt = innerWidth < 400 ? (need ? n + '/' + need : n) + (n === 1 && !need ? ' trick' : ' tricks') : n + (n === 1 ? ' trick' : ' tricks') + (need ? ' · need ' + need : '');
     if(tk.textContent !== txt){
       const grew = +(tk.dataset.n || 0) < n;
       tk.textContent = txt; tk.dataset.n = n;
@@ -1032,9 +1175,10 @@ function renderGame(){
   }
   $('#la').textContent = 'Team A' + (team(ME) === 0 ? ' (You)' : '');
   $('#lb').textContent = 'Team B' + (team(ME) === 1 ? ' (You)' : '');
-  let info = '<span class="chip">Trick '+Math.min(v.tn,9)+' of 9</span>';
-  if(v.bd >= 0) info += '<span class="chip">'+esc(nameAt(v.bd))+' · '+(v.bid===9?'GS 9':v.bid===8?'LS 8':'bid '+v.bid)+'</span>';
-  if(v.tr) info += '<span class="chip trump">'+(v.tr === 'N' ? 'No Trump' : '<span class="suit">'+SYM[v.tr]+'</span>'+SNAME[v.tr])+'</span>';
+  let info = '';
+  if(v.tr) info += '<span class="chip trump">'+(v.tr === 'N' ? 'No Trump' : '<span class="suit">'+SYM[v.tr]+'</span><span class="tn">'+SNAME[v.tr]+'</span>')+'</span>';
+  info += '<span class="chip"><span class="tw">Trick </span>'+Math.min(v.tn,9)+'/9</span>';
+  if(v.bd >= 0) info += '<span class="chip bidc">'+esc(nameAt(v.bd))+' · '+(v.bid===9?'GS 9':v.bid===8?'LS 8':v.bid)+'</span>';
   if(MODE !== 'solo') info += '<span class="chip lock" title="Room code">'+esc((v.code||'').toUpperCase())+'</span>';
   $('#info').innerHTML = info;
   $('#shuffle').hidden = v.ph !== 'deal';
@@ -1043,7 +1187,9 @@ function renderGame(){
     const nm = nameAt(p);
     el.classList.toggle('tb', team(p) === 1);
     el.querySelector('.ini').textContent = nm.charAt(0).toUpperCase() || '?';
-    el.querySelector('.nm').textContent = nm + (v.aw[p] ? ' (bot)' : '');
+    const off = !!(v.of && v.of[p] >= 0);
+    el.classList.toggle('off', off);
+    el.querySelector('.nm').textContent = nm + (v.aw[p] ? ' (bot)' : off ? ' (offline)' : '');
     const turn = (v.ph==='bid' && v.bt===p && v.bc<6) || (v.ph==='play' && v.turn===p && v.tk.length<6) || (v.ph==='trump' && v.bd===p) || (v.ph==='raise' && v.bd===p);
     el.classList.toggle('turn', turn);
     let st;
@@ -1087,12 +1233,20 @@ function renderGame(){
   const hEl = $('#hand');
   hEl.classList.toggle('mine', mine);
   hEl.innerHTML = sortHand(HAND, v.tr).map(c => cardHTML(c, mine ? (ok.has(c.id) ? 'ok' : 'no') : '')).join('');
+  fitHand();
   renderAction(mine, trick);
 }
 function renderAction(mine, trick){
   const a = $('#action'), v = V;
-  const lost = MODE === 'client' && Date.now() - lastHostSeen > 8000;
-  if(lost){ a.innerHTML = '<span class="hint">The host has disconnected. Waiting for them to come back…</span>'; return; }
+  const lost = MODE === 'client' && (!HOSTON || Date.now() - lastHostSeen > 15000);
+  if(lost){ a.innerHTML = '<span class="hint"><b>'+esc(nameAt(0))+'</b> (host) is offline. The game continues as soon as they’re back.</span>'; return; }
+  const tp = v.ph === 'bid' && v.bc < 6 ? v.bt : v.ph === 'play' && v.tk.length < 6 ? v.turn : (v.ph === 'trump' || v.ph === 'raise') ? v.bd : -1;
+  if(tp >= 0 && tp !== ME && v.of && v.of[tp] >= 0){
+    const sec = v.of[tp];
+    a.innerHTML = '<span class="hint">Waiting for <b>'+esc(nameAt(tp))+'</b> to reconnect'+(sec ? ' · a bot takes over in '+fmtT(sec) : '')+'</span>' + (MODE === 'host' ? '<button class="bidbtn pass" id="a-bot">Bot plays now</button>' : '');
+    if(MODE === 'host') $('#a-bot').onclick = () => botForSeat(tp);
+    return;
+  }
   if(waitingAct){ a.innerHTML = '<span class="hint">Sending…</span>'; return; }
   if(v.ph === 'bid' && v.bt === ME && v.bc < 6){
     let h = '<span class="hint">'+(v.bid ? 'Highest: <b>'+esc(nameAt(v.bd))+' '+v.bid+'</b>' : 'Your bid')+'</span>';
@@ -1260,12 +1414,14 @@ function nameModal(title, withCode, go, prefill){
 function openSettings(){
   const segSpeed = ['slow','normal','fast'].map(v => '<button data-sp="'+v+'" class="'+(SET.speed===v?'on':'')+'">'+v[0].toUpperCase()+v.slice(1)+'</button>').join('');
   const segRaise = [10,20,30].map(v => '<button data-rs="'+v+'" class="'+(SET.raise===v?'on':'')+'">'+v+'s</button>').join('');
+  const segAway = [[1,'1 min'],[5,'5 min'],[10,'10 min'],[0,'No limit']].map(([v,l]) => '<button data-aw="'+v+'" class="'+(SET.away===v?'on':'')+'">'+l+'</button>').join('');
   const tog = (k, t, sub) => '<div class="tog"><div>'+t+(sub?'<small>'+sub+'</small>':'')+'</div><button class="sw '+(SET[k]?'on':'')+'" data-k="'+k+'" aria-label="'+t+'" aria-pressed="'+!!SET[k]+'"></button></div>';
   openModal('<h2>Table &amp; bots</h2>'
     + '<h3>Your profile</h3><div class="field"><label for="f-name">Your name</label><input id="f-name" maxlength="14" value="'+esc(SET.name)+'" placeholder="You"></div>'
     + '<h3>Sound</h3>' + tog('sound','Card sounds') + tog('voice','Table host voice','Announces trump, jokers, the last trick and whether the bid was made.') + tog('talk','Bot table talk','Bots react to Joker slams, getting trumped, and made or broken bids.')
     + '<h3>Bot speed</h3><p style="margin:0 0 8px">How long each bot takes to play a card. In online games the host’s setting is used.</p><div class="seg">'+segSpeed+'</div>'
     + '<h3>Raise time</h3><p style="margin:0 0 8px">How long the bidder gets to decide a raise to LS or GS after 5 tricks. In online games the host’s setting is used.</p><div class="seg">'+segRaise+'</div>'
+    + '<h3>Reconnect wait</h3><p style="margin:0 0 8px">In online games, how long the table waits for a player who loses connection before a bot plays their seat. The host’s setting is used.</p><div class="seg">'+segAway+'</div>'
     + '<h3>Bot names</h3><div class="botnames">'+[1,2,3,4,5].map(p => '<div class="field"><label for="f-b'+p+'">Seat '+(p+1)+' · '+(team(p)?'Team B':'Team A')+'</label><input id="f-b'+p+'" maxlength="12" value="'+esc(SET.bots[p-1])+'"></div>').join('')+'</div>'
     + '<div class="row"><button class="btn" id="s-reset">Reset stats</button><button class="btn primary" id="s-save">Save</button></div>');
   const sh = $('#sheet');
@@ -1277,6 +1433,7 @@ function openSettings(){
     sh.querySelectorAll('.sw').forEach(b => SET[b.dataset.k] = b.classList.contains('on'));
     SET.speed = sh.querySelector('[data-sp].on').dataset.sp;
     SET.raise = +sh.querySelector('[data-rs].on').dataset.rs;
+    SET.away = +sh.querySelector('[data-aw].on').dataset.aw;
     const fallback = ['Chotu','Bunty','Dabbu','Laddu','Munna'];
     for(let p=1;p<=5;p++) SET.bots[p-1] = cleanName($('#f-b'+p).value) || fallback[p-1];
     store.set('nattis-settings', SET);
@@ -1307,11 +1464,12 @@ function toMenu(){
   bumpGen();
   if(modalKey){ $('#modal').hidden = true; $('#sheet').innerHTML = ''; modalKey = null; }
   save(); leaveRoom(); MODE = 'menu'; V = null; lastFx = -1;
+  store.del('nattis-auto'); keepAwake(false);
   showScreen('menu'); renderStats();
 }
 function resume(){
   if(S.mode === 'host') return hostGame(true);
-  bumpGen(); MODE = 'solo'; ME = 0; lastFx = -1;
+  bumpGen(); MODE = 'solo'; ME = 0; lastFx = -1; keepAwake(true);
   showScreen('game'); $('#trick').innerHTML = '';
   advance();
 }
@@ -1342,6 +1500,8 @@ $('#l-start').onclick = () => {
 
 buildSeats();
 renderStats();
+fit();
+if(!/[?&]room=/.test(location.search)) autoResume();
 try{
   const q = new URLSearchParams(location.search).get('room');
   if(q){ history.replaceState(null, '', location.pathname); nameModal('Join a game', true, code => joinGame(code, false), q.toUpperCase().slice(0,5)); }
